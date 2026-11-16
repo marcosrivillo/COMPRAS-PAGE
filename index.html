@@ -167,7 +167,7 @@ const ICONO_BUSCAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 
 // --- Estado de la vista ---
 let datos = null;
-const vista = { tab: leerGuardado('panel-compras-tab') || 'facturas', filtros: {}, orden: {}, abiertos: new Set() };
+const vista = { tab: leerGuardado('panel-compras-tab') || 'facturas', filtros: {}, orden: {}, abiertos: new Set(), sub: {} };
 const f = (k, defecto = '') => vista.filtros[vista.tab + k] ?? defecto;
 
 // --- Controles ---
@@ -204,7 +204,16 @@ const TABS = {
       select('local', 'Local', unicos(lista.map((x) => x.local))),
       buscar('Buscar factura'),
     ];
-    const filas = (estado === 'no' ? no : estado === 'si' ? si : base).map((x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha) }));
+    const conDias = (x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha) });
+    // No pagadas: una fila por proveedor con todas sus facturas pendientes.
+    const porProveedor = new Map();
+    for (const x of no) { const k = clave(x.proveedor); porProveedor.has(k) ? porProveedor.get(k).push(x) : porProveedor.set(k, [x]); }
+    const grupos = [...porProveedor.values()].map((fs) => fs.length === 1 ? conDias(fs[0]) : {
+      id: 'g:' + clave(fs[0].proveedor), proveedor: fs[0].proveedor, total: fs.reduce((s, x) => s + x.total, 0),
+      fecha: 'No definida', numero: `${fs.length} facturas`, medio: unicos(fs.map((x) => x.medio)).join(', '),
+      local: unicos(fs.map((x) => x.local)).join(', '), dias: Math.max(...fs.map((x) => dias(x.fecha) || 0)), grupo: fs,
+    });
+    const filas = estado === 'no' ? grupos : (estado === 'si' ? si : base).map(conDias);
     const columnas = [
       { k: 'proveedor', t: 'Proveedor' }, { k: 'total', t: 'Total', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
       { k: 'numero', t: 'Número', opt: true }, { k: 'medio', t: 'Medio', opt: true }, { k: 'local', t: 'Local', opt: true },
@@ -212,13 +221,31 @@ const TABS = {
         : { k: 'dias', t: 'Días', tipo: 'num', html: (x) => x.pagada ? '<span class="tag t-verde">Pagada</span>'
           : `<span class="tag ${x.dias > 30 ? 't-rojo' : x.dias > 15 ? 't-ambar' : 't-azul'}">${x.dias} d</span>` },
     ];
+    const renglonesTabla = (renglones) => renglones.length ? tabla([['Producto'], ['Cantidad', 1], ['Subtotal', 1]], renglones.map((i) =>
+      `<tr><td>${esc(i.producto)}${i.sinAsignar ? ' <span class="tag t-ambar">sin asignar</span>' : ''}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))
+      : '<span class="tenue">Sin renglones cargados.</span>';
+    const detalleGrupo = (x) => {
+      const sub = vista.sub[x.id] ?? 'general';
+      const botones = `<div class="seg" role="group">${[['general', 'General'], ['factura', 'Por factura']].map(([v, t]) =>
+        `<button type="button" data-sub="${v}" data-id="${esc(x.id)}" aria-pressed="${v === sub}">${t}</button>`).join('')}</div>`;
+      if (sub === 'factura') return botones + x.grupo.slice().sort((a, b) => (fecha(b.fecha) ?? 0) - (fecha(a.fecha) ?? 0)).map((fa) =>
+        `<div class="titulo-det">${esc(fa.fecha)} · ${esc(fa.numero)} · ${gs(fa.total)}</div>${renglonesTabla(datos.items.filter((i) => i.factura === fa.id))}`).join('');
+      // General: productos de todas las facturas sumados por producto y unidad.
+      const ids = new Set(x.grupo.map((fa) => fa.id)), suma = new Map();
+      for (const i of datos.items) {
+        if (!ids.has(i.factura)) continue;
+        const k = clave(i.producto) + '|' + clave(i.unidad), s = suma.get(k);
+        s ? (s.cantidad += i.cantidad, s.subtotal += i.subtotal, s.sinAsignar ||= i.sinAsignar) : suma.set(k, { ...i });
+      }
+      return botones + `<div class="titulo-det">${x.grupo.length} facturas · productos sumados</div>` +
+        renglonesTabla([...suma.values()].sort((a, b) => b.subtotal - a.subtotal));
+    };
     const detalle = (x) => {
+      if (x.grupo) return detalleGrupo(x);
       const renglones = datos.items.filter((i) => i.factura === x.id);
       return `<div class="grilla"><span>Número <b>${esc(x.numero)}</b></span><span>Medio <b>${esc(x.medio || '—')}</b></span>
         <span>Local <b>${esc(x.local || '—')}</b></span>${x.pagada ? `<span>Pagada <b>${esc(x.fecha_pago || '—')}</b></span>` : ''}</div>
-        ${renglones.length ? tabla([['Producto'], ['Cantidad', 1], ['Subtotal', 1]], renglones.map((i) =>
-          `<tr><td>${esc(i.producto)}${i.sinAsignar ? ' <span class="tag t-ambar">sin asignar</span>' : ''}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))
-          : '<span class="tenue">Sin renglones cargados.</span>'}`;
+        ${renglonesTabla(renglones)}`;
     };
     return { filtros, filas, columnas, suma: 'total', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
@@ -411,6 +438,8 @@ caja.addEventListener('click', (e) => {
     vista.orden[vista.tab] = [th.dataset.orden, actual === th.dataset.orden ? -sentido : -1];
     return dibujar();
   }
+  const sub = e.target.closest('[data-sub]');
+  if (sub) { vista.sub[sub.dataset.id] = sub.dataset.sub; return dibujar(); }
   const tr = e.target.closest('tr.fila');
   if (tr) alternar(tr);
 });
