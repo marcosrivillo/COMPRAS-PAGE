@@ -5,55 +5,130 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>Panel de compras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&family=Fira+Code:wght@500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --fondo: #f6f7f9; --panel: #fff; --texto: #1d2330; --suave: #667085; --borde: #e3e6eb;
-    --acento: #1f6feb; --rojo: #c4320a; --verde: #067647; --fila: #f9fafb;
+    --fondo: #f1f5f9; --panel: #fff; --texto: #0f172a; --suave: #475569; --tenue: #94a3b8; --borde: #e2e8f0;
+    --acento: #1e40af; --acento2: #3b82f6; --acento-bg: #dbeafe; --ambar: #b45309; --ambar-bg: #fef3c7;
+    --rojo: #b91c1c; --rojo-bg: #fee2e2; --verde: #047857; --verde-bg: #d1fae5; --hover: #f8fafc; --abierta: #eff6ff;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --fondo: #0f1217; --panel: #171b22; --texto: #e6e9ef; --suave: #98a2b3; --borde: #2a303a;
-      --acento: #5b9bff; --rojo: #ff7a59; --verde: #47cd89; --fila: #1b2028; }
+    :root { --fondo: #0b1120; --panel: #111827; --texto: #e2e8f0; --suave: #94a3b8; --tenue: #64748b; --borde: #1f2937;
+      --acento: #93c5fd; --acento2: #60a5fa; --acento-bg: #1e3a8a55; --ambar: #fbbf24; --ambar-bg: #78350f55;
+      --rojo: #fca5a5; --rojo-bg: #7f1d1d55; --verde: #6ee7b7; --verde-bg: #064e3b55; --hover: #1e293b; --abierta: #172554; }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fondo); color: var(--texto); }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
-  h1 { font-size: 18px; margin: 0; flex: 1; }
-  #hora { color: var(--suave); font-size: 13px; }
-  button, select, input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 7px 10px; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 13px/1.35 "Fira Sans", system-ui, sans-serif; background: var(--fondo); color: var(--texto);
+    display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  .n { font-family: "Fira Code", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 12px; }
+  button, select, input { font: inherit; color: inherit; }
   button { cursor: pointer; }
-  nav { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--borde); overflow-x: auto; scrollbar-width: none; }
-  #caja:empty, #filtros:empty { display: none; }
-  nav button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--suave); white-space: nowrap; }
-  nav button[aria-selected="true"] { color: var(--texto); border-bottom-color: var(--acento); font-weight: 600; }
-  #filtros { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
-  #filtros input[type="search"] { flex: 1 1 200px; }
-  #caja { margin: 0 16px 16px; background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; overflow: auto; max-height: calc(100vh - 210px); }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--borde); white-space: nowrap; vertical-align: top; }
-  td.largo { white-space: normal; min-width: 220px; }
-  th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; color: var(--suave); font-weight: 600; z-index: 2; }
-  th:first-child, td:first-child { position: sticky; left: 0; background: var(--panel); z-index: 1; }
-  th:first-child { z-index: 3; }
-  tbody tr:nth-child(even) td { background: var(--fila); }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  tfoot td { position: sticky; bottom: 0; background: var(--panel); font-weight: 600; border-top: 1px solid var(--borde); }
-  .marca { font-size: 12px; padding: 1px 6px; border-radius: 6px; border: 1px solid currentColor; }
-  .rojo { color: var(--rojo); } .verde { color: var(--verde); } .suave { color: var(--suave); }
+  :focus-visible { outline: 2px solid var(--acento2); outline-offset: 1px; }
+
+  /* Barra superior: titulo, pestañas y actualizar en una sola linea */
+  header { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--borde); }
+  h1 { font-size: 14px; font-weight: 600; margin: 0; white-space: nowrap; }
+  nav { display: flex; gap: 2px; background: var(--fondo); padding: 2px; border-radius: 8px; overflow-x: auto; scrollbar-width: none; }
+  nav button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; color: var(--suave); font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
+  nav button:hover { color: var(--texto); }
+  nav button[aria-selected="true"] { background: var(--panel); color: var(--acento); box-shadow: 0 1px 2px #0002; }
+  .der { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  #hora { color: var(--tenue); font-size: 12px; white-space: nowrap; }
+  .icono { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--borde); background: var(--panel); border-radius: 7px; color: var(--suave); }
+  .icono:hover { color: var(--acento); border-color: var(--acento2); }
+  .icono svg { width: 16px; height: 16px; }
+  .icono.girando svg { animation: giro .8s linear infinite; }
+  @keyframes giro { to { transform: rotate(360deg); } }
+
+  /* Filtros */
+  #filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; }
+  #filtros:empty { display: none; }
+  .seg { display: flex; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 2px; gap: 2px; }
+  .seg button { border: 0; background: none; padding: 4px 10px; border-radius: 6px; color: var(--suave); white-space: nowrap; transition: background .15s; }
+  .seg button:hover { background: var(--hover); }
+  .seg button[aria-pressed="true"] { background: var(--acento-bg); color: var(--acento); font-weight: 600; }
+  .seg small { display: block; font-size: 11px; font-weight: 400; color: var(--tenue); }
+  .seg button[aria-pressed="true"] small { color: var(--acento2); }
+  select, input[type="date"] { height: 30px; padding: 0 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 7px; max-width: 190px; }
+  .buscar { position: relative; flex: 1 1 160px; }
+  .buscar svg { position: absolute; left: 8px; top: 8px; width: 14px; height: 14px; color: var(--tenue); }
+  .buscar input { width: 100%; height: 30px; padding: 0 8px 0 28px; background: var(--panel); border: 1px solid var(--borde); border-radius: 7px; }
+
+  /* Tabla: ocupa el resto de la pantalla y es lo unico que desplaza */
+  #caja { flex: 1; min-height: 0; margin: 0 10px 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; overflow: auto; }
+  #caja:empty { display: none; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; }
+  th, td { padding: 5px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--borde); }
+  th { position: sticky; top: 0; z-index: 2; background: var(--panel); color: var(--suave); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; }
+  th:hover { color: var(--acento); }
+  th .flecha { color: var(--acento2); }
+  .der-al { text-align: right; }
+  tbody tr.fila { transition: background .12s; }
+  tbody tr.fila:hover { background: var(--hover); }
+  tbody tr.fila.con { cursor: pointer; }
+  tbody tr.fila.abierta { background: var(--abierta); }
+  td.prim { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .chev { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; color: var(--tenue); transition: transform .15s; }
+  tr.abierta .chev { transform: rotate(90deg); color: var(--acento); }
+  tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--panel); font-weight: 600; border-top: 1px solid var(--borde); border-bottom: 0; }
+  .vacio { text-align: center; color: var(--tenue); padding: 24px; }
+
+  /* Detalle desplegado */
+  tr.det > td { background: var(--abierta); padding: 4px 10px 10px 26px; white-space: normal; }
+  .grilla { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 2px 0 6px; color: var(--suave); }
+  .grilla b { color: var(--texto); font-weight: 500; }
+  .mini { border-collapse: collapse; width: auto; min-width: min(100%, 420px); background: var(--panel); border-radius: 6px; overflow: hidden; }
+  .mini th, .mini td { position: static; padding: 3px 8px; font-size: 12px; border-bottom: 1px solid var(--borde); cursor: default; }
+  .titulo-det { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--tenue); margin: 6px 0 3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 2px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--borde); font-size: 12px; }
+  .chip .n { color: var(--suave); font-size: 11px; }
+
+  .tag { display: inline-block; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; }
+  .t-rojo { color: var(--rojo); background: var(--rojo-bg); }
+  .t-verde { color: var(--verde); background: var(--verde-bg); }
+  .t-ambar { color: var(--ambar); background: var(--ambar-bg); }
+  .t-azul { color: var(--acento); background: var(--acento-bg); }
+  .rojo { color: var(--rojo); } .tenue { color: var(--tenue); }
+
   #aviso { margin: 40px 16px; text-align: center; color: var(--suave); }
+
+  /* Celular: menos columnas; lo demas esta en el detalle */
+  @media (max-width: 700px) {
+    header { flex-wrap: wrap; row-gap: 6px; }
+    nav { order: 3; width: 100%; }
+    nav button { flex: 1; padding: 6px 4px; }
+    .opt { display: none; }
+    td.prim { max-width: 150px; }
+    select { max-width: 48%; flex: 1; }
+    .seg { width: 100%; } .seg button { flex: 1; padding: 4px 4px; }
+    #caja { margin: 0 6px 6px; }
+    tr.det > td { padding: 4px 6px 8px; }
+    .mini { min-width: 0; width: 100%; }
+    .mini th, .mini td { white-space: normal; padding: 3px 4px; font-size: 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Panel de compras</h1>
-  <span id="hora"></span>
-  <button id="actualizar" type="button">Actualizar</button>
+  <h1>Compras</h1>
+  <nav role="tablist" aria-label="Secciones">
+    <button role="tab" data-tab="facturas">Facturas</button>
+    <button role="tab" data-tab="pagos">Pagos</button>
+    <button role="tab" data-tab="proveedores">Proveedores</button>
+    <button role="tab" data-tab="productos">Productos</button>
+  </nav>
+  <div class="der">
+    <span id="hora"></span>
+    <button id="actualizar" class="icono" type="button" aria-label="Actualizar datos" title="Actualizar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+    </button>
+  </div>
 </header>
-<nav role="tablist">
-  <button role="tab" data-tab="facturas">Facturas</button>
-  <button role="tab" data-tab="pagos">Pagos</button>
-  <button role="tab" data-tab="proveedores">Proveedores</button>
-  <button role="tab" data-tab="productos">Productos</button>
-</nav>
 <div id="filtros"></div>
 <div id="caja"></div>
 <p id="aviso" hidden></p>
@@ -72,199 +147,301 @@ let token = enLink || leerGuardado(CLAVE);
 
 // --- Formato ---
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const gs = (n) => 'Gs. ' + Math.round(Number(n) || 0).toLocaleString('es-PY');
-const cant = (n) => (Number(n) || 0).toLocaleString('es-PY', { maximumFractionDigits: 3 });
+const gs = (n) => Math.round(Number(n) || 0).toLocaleString('es-PY');
+const corto = (n) => { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toLocaleString('es-PY', { maximumFractionDigits: 1 }) + ' M' : n >= 1e3 ? Math.round(n / 1e3) + ' mil' : gs(n); };
+const cant = (n) => (Number(n) || 0).toLocaleString('es-PY', { maximumFractionDigits: 2 });
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-// dd/mm/aaaa -> Date (UTC) o null.
+const DIA = 86400000;
 function fecha(texto) {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(texto ?? '').trim());
-  return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+  return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : null;
 }
-const ddmm = (d) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-const mesDe = (texto) => { const d = fecha(texto); return d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}` : ''; };
-const nombreMes = (clave) => { const [a, m] = clave.split('-'); return `${MESES[+m - 1]} ${a}`; };
 const hoy = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
-const dias = (texto) => { const d = fecha(texto); return d ? Math.round((hoy() - d) / 86400000) : ''; };
+const mesDe = (texto) => { const d = fecha(texto); if (d == null) return ''; const x = new Date(d); return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}`; };
+const nombreMes = (clave) => { const [a, m] = clave.split('-'); return `${MESES[+m - 1]} ${a}`; };
+const dias = (texto) => { const d = fecha(texto); return d == null ? '' : Math.round((hoy() - d) / DIA); };
 const unicos = (lista) => [...new Set(lista.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'es'));
+const clave = (s) => String(s ?? '').trim().toUpperCase();
+const ICONO_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+const ICONO_BUSCAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
 
-// --- Estado ---
+// --- Estado de la vista ---
 let datos = null;
-const vista = { tab: leerGuardado('panel-compras-tab') || 'facturas', filtros: {}, orden: {} };
-const f = (clave, defecto = '') => vista.filtros[vista.tab + clave] ?? defecto;
+const vista = { tab: leerGuardado('panel-compras-tab') || 'facturas', filtros: {}, orden: {}, abiertos: new Set() };
+const f = (k, defecto = '') => vista.filtros[vista.tab + k] ?? defecto;
 
-// --- Filtros: cada uno es [clave, etiqueta, opciones [valor, texto]] o 'buscar' o una fecha ---
-function select(clave, etiqueta, opciones, defecto = '') {
-  const actual = f(clave, defecto);
-  return `<select data-f="${clave}" aria-label="${esc(etiqueta)}">${opciones.map(([v, t]) =>
-    `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+// --- Controles ---
+function seg(k, opciones, defecto) {
+  const actual = f(k, defecto);
+  return `<div class="seg" role="group">${opciones.map(([v, t, sub]) =>
+    `<button type="button" data-seg="${k}" data-v="${esc(v)}" aria-pressed="${v === actual}">${esc(t)}${sub != null ? `<small class="n">${esc(sub)}</small>` : ''}</button>`).join('')}</div>`;
 }
-const todas = (etiqueta, valores, formato = (v) => v) => [['', etiqueta], ...valores.map((v) => [v, formato(v)])];
-const buscar = () => `<input type="search" data-f="q" placeholder="Buscar..." value="${esc(f('q'))}">`;
+function select(k, etiqueta, valores, formato = (v) => v) {
+  const actual = f(k);
+  return `<select data-f="${k}" aria-label="${esc(etiqueta)}"><option value="">${esc(etiqueta)}</option>${valores.map((v) =>
+    `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>${esc(formato(v))}</option>`).join('')}</select>`;
+}
+const buscar = (texto = 'Buscar') => `<label class="buscar">${ICONO_BUSCAR}<input type="search" data-f="q" placeholder="${esc(texto)}..." value="${esc(f('q'))}" aria-label="${esc(texto)}"></label>`;
 const coincide = (fila, campos) => {
   const q = f('q').trim().toLowerCase();
   return !q || campos.some((c) => String(Array.isArray(fila[c]) ? fila[c].join(' ') : fila[c] ?? '').toLowerCase().includes(q));
 };
+const resumen = (lista, campo) => `${lista.length} · ${corto(lista.reduce((s, x) => s + (Number(x[campo]) || 0), 0))}`;
+const tabla = (cabeza, filas) => `<table class="mini"><thead><tr>${cabeza.map(([t, d]) => `<th${d ? ' class="der-al"' : ''}>${esc(t)}</th>`).join('')}</tr></thead><tbody>${filas.join('')}</tbody></table>`;
 
-// --- Pestañas: filtros, filas y columnas. tipo: texto | gs | num | fecha | dias ---
+// Columna: { k, t, tipo: texto|gs|num|fecha|dias, opt (se oculta en celular), html (celda propia) }
 const TABS = {
   facturas() {
     const lista = datos.facturas;
     const estado = f('estado', 'no');
+    const base = lista.filter((x) => (!f('proveedor') || x.proveedor === f('proveedor')) && (!f('mes') || mesDe(x.fecha) === f('mes')) &&
+      (!f('local') || x.local === f('local')) && coincide(x, ['proveedor', 'numero', 'medio', 'local']));
+    const no = base.filter((x) => !x.pagada), si = base.filter((x) => x.pagada);
     const filtros = [
-      select('estado', 'Estado', [['no', 'No pagadas'], ['si', 'Pagadas'], ['', 'Todas']], 'no'),
-      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
-      select('mes', 'Mes', todas('Todos los meses', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes)),
-      select('local', 'Local', todas('Todos los locales', unicos(lista.map((x) => x.local)))),
-      buscar(),
+      seg('estado', [['no', 'No pagadas', resumen(no, 'total')], ['si', 'Pagadas', resumen(si, 'total')], ['', 'Todas', resumen(base, 'total')]], 'no'),
+      select('proveedor', 'Proveedor', unicos(lista.map((x) => x.proveedor))),
+      select('mes', 'Mes', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes),
+      select('local', 'Local', unicos(lista.map((x) => x.local))),
+      buscar('Buscar factura'),
     ];
-    const filas = lista.filter((x) => (!estado || x.pagada === (estado === 'si')) && (!f('proveedor') || x.proveedor === f('proveedor')) &&
-      (!f('mes') || mesDe(x.fecha) === f('mes')) && (!f('local') || x.local === f('local')) && coincide(x, ['proveedor', 'numero', 'medio', 'local']))
-      .map((x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha), estadoTxt: x.pagada ? 'Pagada' : 'No pagada' }));
-    const columnas = [['fecha', 'Fecha', 'fecha'], ['proveedor', 'Proveedor'], ['total', 'Total', 'gs'], ['numero', 'Número'], ['medio', 'Medio'], ['local', 'Local'],
-      ...(estado === 'si' ? [['fecha_pago', 'Fecha de pago', 'fecha']] : estado === 'no' ? [['dias', 'Días', 'num']] : [['estadoTxt', 'Estado']])];
-    return { filtros, filas, columnas, suma: 'total', orden: ['fecha', -1] };
+    const filas = (estado === 'no' ? no : estado === 'si' ? si : base).map((x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha) }));
+    const columnas = [
+      { k: 'proveedor', t: 'Proveedor' }, { k: 'total', t: 'Total', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
+      { k: 'numero', t: 'Número', opt: true }, { k: 'medio', t: 'Medio', opt: true }, { k: 'local', t: 'Local', opt: true },
+      estado === 'si' ? { k: 'fecha_pago', t: 'Pagada', tipo: 'fecha', opt: true }
+        : { k: 'dias', t: 'Días', tipo: 'num', html: (x) => x.pagada ? '<span class="tag t-verde">Pagada</span>'
+          : `<span class="tag ${x.dias > 30 ? 't-rojo' : x.dias > 15 ? 't-ambar' : 't-azul'}">${x.dias} d</span>` },
+    ];
+    const detalle = (x) => {
+      const renglones = datos.items.filter((i) => i.factura === x.id);
+      return `<div class="grilla"><span>Número <b>${esc(x.numero)}</b></span><span>Medio <b>${esc(x.medio || '—')}</b></span>
+        <span>Local <b>${esc(x.local || '—')}</b></span>${x.pagada ? `<span>Pagada <b>${esc(x.fecha_pago || '—')}</b></span>` : ''}</div>
+        ${renglones.length ? tabla([['Producto'], ['Cantidad', 1], ['Subtotal', 1]], renglones.map((i) =>
+          `<tr><td>${esc(i.producto)}${i.sinAsignar ? ' <span class="tag t-ambar">sin asignar</span>' : ''}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))
+          : '<span class="tenue">Sin renglones cargados.</span>'}`;
+    };
+    return { filtros, filas, columnas, suma: 'total', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
+
   pagos() {
-    const lista = datos.pagos;
-    const estado = f('estado', 'asociados');
+    const lista = datos.pagos.map((x, i) => ({ ...x, id: 'p' + i }));
+    const estado = f('estado', 'esperando');
+    const base = lista.filter((x) => (!f('proveedor') || x.proveedor === f('proveedor')) && (!f('mes') || mesDe(x.fecha) === f('mes')) &&
+      (!f('medio') || x.medio === f('medio')) && coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']));
+    const esp = base.filter((x) => x.esperando), aso = base.filter((x) => !x.esperando);
     const filtros = [
-      select('estado', 'Estado', [['asociados', 'Asociados'], ['esperando', 'Esperando factura'], ['', 'Todos']], 'asociados'),
-      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
-      select('mes', 'Mes', todas('Todos los meses', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes)),
-      select('medio', 'Medio', todas('Todos los medios', unicos(lista.map((x) => x.medio)))),
-      buscar(),
+      seg('estado', [['esperando', 'Esperando factura', resumen(esp, 'monto')], ['asociados', 'Asociados', resumen(aso, 'monto')], ['', 'Todos', resumen(base, 'monto')]], 'esperando'),
+      select('proveedor', 'Proveedor', unicos(lista.map((x) => x.proveedor))),
+      select('mes', 'Mes', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes),
+      select('medio', 'Medio', unicos(lista.map((x) => x.medio))),
+      buscar('Buscar pago'),
     ];
-    const filas = lista.filter((x) => (!estado || x.esperando === (estado === 'esperando')) && (!f('proveedor') || x.proveedor === f('proveedor')) &&
-      (!f('mes') || mesDe(x.fecha) === f('mes')) && (!f('medio') || x.medio === f('medio')) &&
-      coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']))
-      .map((x) => ({ ...x, facturasTxt: x.facturas.join(', '), esperaTxt: [x.esperadas.length ? 'Facturas: ' + x.esperadas.join(', ') : '', x.sinControl ? 'sin control' : ''].filter(Boolean).join(' · ') }));
-    const columnas = [['fecha', 'Fecha', 'fecha'], ['proveedor', 'Proveedor'], ['monto', 'Monto', 'gs'], ['medio', 'Medio'], ['referencia', 'Referencia'],
-      ...(estado !== 'esperando' ? [['facturasTxt', 'Facturas aplicadas', 'largo']] : []),
-      ...(estado !== 'asociados' ? [['saldo', 'Saldo esperando', 'gs'], ['esperaTxt', 'Espera', 'largo']] : [])];
-    return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1] };
+    const filas = estado === 'esperando' ? esp : estado === 'asociados' ? aso : base;
+    const columnas = [
+      { k: 'proveedor', t: 'Proveedor' }, { k: 'monto', t: 'Monto', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
+      { k: 'medio', t: 'Medio', opt: true }, { k: 'referencia', t: 'Referencia', opt: true },
+      { k: 'saldo', t: 'Estado', tipo: 'gs', html: (x) => !x.esperando ? `<span class="tag t-verde">${x.facturas.length} fact.</span>`
+        : `${x.sinControl ? '<span class="tag t-rojo">sin control</span> ' : ''}<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>` },
+    ];
+    const detalle = (x) => `<div class="grilla"><span>Medio <b>${esc(x.medio || '—')}</b></span><span>Referencia <b class="n">${esc(x.referencia || '—')}</b></span>
+      ${x.saldo ? `<span>Saldo sin factura <b class="n">${gs(x.saldo)}</b></span>` : ''}</div>
+      ${x.facturas.length ? `<div class="titulo-det">Facturas aplicadas</div><div class="chips">${x.facturas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
+      ${x.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${x.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
+      ${x.sinControl && x.esperando ? '<p class="rojo">Sin fila en CONTROL_PAGOS: no se sabe cuánto de este pago ya se usó.</p>' : ''}`;
+    return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
+
   proveedores() {
     const deuda = f('deuda');
-    const filtros = [select('deuda', 'Deuda', [['', 'Todos'], ['con', 'Con deuda'], ['sin', 'Sin deuda']]), buscar()];
-    const filas = datos.proveedores.filter((x) => (!deuda || (x.deuda > 0) === (deuda === 'con')) &&
-      coincide(x, ['proveedor', 'ruc', 'cuenta', 'alias', 'otros_nombres', 'telefono', 'email', 'direccion', 'productos']))
-      .map((x) => ({ ...x, productosTxt: x.productos.join(', ') }));
-    const columnas = [['proveedor', 'Proveedor'], ['deuda', 'Deuda', 'gs'], ['total', 'Total comprado', 'gs'], ['facturas', 'Facturas', 'num'],
-      ['ruc', 'RUC'], ['cuenta', 'Cuenta'], ['alias', 'Alias'], ['telefono', 'Teléfono'], ['email', 'Email'], ['direccion', 'Dirección', 'largo'],
-      ['otros_nombres', 'Otros nombres', 'largo'], ['productosTxt', 'Productos', 'largo']];
-    return { filtros, filas, columnas, suma: 'deuda', orden: ['deuda', -1] };
-  },
-  productos() {
-    const lista = datos.items;
-    const grupo = f('grupo', 'semana');
-    const desde = fecha(f('desde').split('-').reverse().join('/'));
-    const hasta = fecha(f('hasta').split('-').reverse().join('/'));
-    const filtros = [
-      select('grupo', 'Agrupar', [['dia', 'Por día'], ['semana', 'Por semana'], ['mes', 'Por mes']], 'semana'),
-      `<input type="date" data-f="desde" aria-label="Desde" value="${esc(f('desde'))}">`,
-      `<input type="date" data-f="hasta" aria-label="Hasta" value="${esc(f('hasta'))}">`,
-      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
-      select('local', 'Local', todas('Todos los locales', unicos(lista.map((x) => x.local)))),
-      buscar(),
+    const base = datos.proveedores.filter((x) => coincide(x, ['proveedor', 'ruc', 'cuenta', 'alias', 'otros_nombres', 'telefono', 'email', 'direccion', 'productos']));
+    const con = base.filter((x) => x.deuda > 0), sin = base.filter((x) => x.deuda <= 0);
+    const filtros = [seg('deuda', [['', 'Todos', base.length], ['con', 'Con deuda', resumen(con, 'deuda')], ['sin', 'Sin deuda', sin.length]], ''), buscar('Buscar proveedor o producto')];
+    // Productos = los anotados en PROVEEDORES mas los que aparecen en sus facturas (igual que el detalle).
+    const filas = (deuda === 'con' ? con : deuda === 'sin' ? sin : base).map((x) => ({ ...x,
+      nprod: new Set([...x.productos, ...datos.items.filter((i) => clave(i.proveedor) === clave(x.proveedor)).map((i) => i.producto)].map(clave)).size }));
+    const columnas = [
+      { k: 'proveedor', t: 'Proveedor' },
+      { k: 'deuda', t: 'Deuda', tipo: 'gs', html: (x) => x.deuda > 0 ? `<span class="n rojo">${gs(x.deuda)}</span>` : '<span class="tenue">—</span>' },
+      { k: 'total', t: 'Comprado', tipo: 'gs', opt: true }, { k: 'facturas', t: 'Fact.', tipo: 'num', opt: true },
+      { k: 'nprod', t: 'Productos', tipo: 'num', html: (x) => `<span class="tag t-azul">${x.nprod}</span>` },
+      { k: 'telefono', t: 'Teléfono', opt: true },
     ];
-    const grupos = new Map();
-    for (const x of lista) {
-      const d = fecha(x.fecha);
-      if (!d || (desde && d < desde) || (hasta && d > hasta)) continue;
-      if ((f('proveedor') && x.proveedor !== f('proveedor')) || (f('local') && x.local !== f('local')) || !coincide(x, ['producto', 'proveedor'])) continue;
-      let inicio = d, periodo;
-      if (grupo === 'dia') periodo = ddmm(d) + '/' + d.getUTCFullYear();
-      else if (grupo === 'mes') { inicio = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); periodo = nombreMes(mesDe(x.fecha)); }
-      else { inicio = new Date(d - ((d.getUTCDay() + 6) % 7) * 86400000); periodo = `${ddmm(inicio)} – ${ddmm(new Date(+inicio + 6 * 86400000))}`; }
-      // Unidades distintas nunca se suman.
-      const clave = [+inicio, x.producto.toUpperCase(), String(x.unidad || '').toUpperCase()].join('|');
-      const g = grupos.get(clave) ?? { inicio: +inicio, periodo, producto: x.producto, sinAsignar: x.sinAsignar, unidad: x.unidad, cantidad: 0, gasto: 0, prov: new Set() };
-      g.cantidad += x.cantidad; g.gasto += x.subtotal; g.prov.add(x.proveedor);
-      grupos.set(clave, g);
+    const detalle = (x) => {
+      const k = clave(x.proveedor);
+      const compras = datos.items.filter((i) => clave(i.proveedor) === k);
+      // Por producto: ultima compra y ultimo precio.
+      const ultimo = new Map();
+      for (const i of compras) {
+        const p = clave(i.producto), d = fecha(i.fecha) ?? 0;
+        if (!ultimo.has(p) || d >= ultimo.get(p).d) ultimo.set(p, { nombre: i.producto, d, i });
+      }
+      for (const p of x.productos) if (!ultimo.has(clave(p))) ultimo.set(clave(p), { nombre: p, d: -1 });
+      const productos = [...ultimo.values()].sort((a, b) => b.d - a.d);
+      const pendientes = datos.facturas.filter((fa) => clave(fa.proveedor) === k && !fa.pagada);
+      const dato = (t, v) => v ? `<span>${t} <b>${esc(v)}</b></span>` : '';
+      return `<div class="grilla">${dato('RUC', x.ruc)}${dato('Cuenta', x.cuenta)}${dato('Alias', x.alias)}${dato('Teléfono', x.telefono)}${dato('Email', x.email)}
+          ${dato('Dirección', x.direccion)}${dato('También', x.otros_nombres)}<span>Comprado <b class="n">${gs(x.total)}</b> en ${x.facturas} facturas</span></div>
+        <div class="titulo-det">Productos (${productos.length}) · último precio</div>
+        <div class="chips">${productos.map((p) => `<span class="chip">${esc(p.nombre)}${p.i ? `<span class="n">${gs(p.i.cantidad ? p.i.subtotal / p.i.cantidad : 0)} · ${esc(p.i.fecha)}</span>` : '<span class="n">sin compras</span>'}</span>`).join('') || '<span class="tenue">Sin productos.</span>'}</div>
+        ${pendientes.length ? `<div class="titulo-det">Facturas sin pagar</div>${tabla([['Fecha'], ['Número'], ['Total', 1]], pendientes.map((fa) =>
+          `<tr><td>${esc(fa.fecha)}</td><td>${esc(fa.numero)}</td><td class="der-al n">${gs(fa.total)}</td></tr>`))}` : ''}`;
+    };
+    return { filtros, filas, columnas, suma: 'deuda', orden: ['deuda', -1], id: (x) => x.proveedor, detalle };
+  },
+
+  productos() {
+    const periodo = f('periodo', 'semana');
+    const h = hoy(), lunes = h - ((new Date(h).getUTCDay() + 6) % 7) * DIA, primero = Date.UTC(new Date(h).getUTCFullYear(), new Date(h).getUTCMonth(), 1);
+    const desde = { hoy: h, semana: lunes, mes: primero, '30': h - 29 * DIA, todo: -Infinity }[periodo];
+    // Todos los productos registrados (BD) mas los que aparecen en facturas sin estar en BD.
+    const productos = new Map(datos.catalogo.map((c) => [clave(c.producto), { producto: c.producto, categoria: c.categoria, compras: [], todas: [] }]));
+    for (const i of datos.items) {
+      const k = clave(i.producto);
+      if (!productos.has(k)) productos.set(k, { producto: i.producto, categoria: i.sinAsignar ? 'SIN ASIGNAR' : '', compras: [], todas: [] });
+      const p = productos.get(k), d = fecha(i.fecha);
+      p.todas.push(i);
+      if (d != null && d >= desde && (!f('proveedor') || i.proveedor === f('proveedor')) && (!f('local') || i.local === f('local'))) p.compras.push(i);
     }
-    const filas = [...grupos.values()].map((g) => ({ ...g, precio: g.cantidad ? g.gasto / g.cantidad : 0,
-      proveedoresTxt: [...g.prov].join(', '), productoTxt: g.producto + (g.sinAsignar ? ' (sin asignar)' : '') }));
-    const columnas = [['periodo', 'Período', 'periodo'], ['productoTxt', 'Producto'], ['cantidad', 'Cantidad', 'num'], ['unidad', 'Unidad'],
-      ['gasto', 'Gasto', 'gs'], ['precio', 'Precio promedio', 'gs'], ['proveedoresTxt', 'Proveedores', 'largo']];
-    return { filtros, filas, columnas, suma: 'gasto', orden: ['periodo', -1] };
+    const base = [...productos.values()].filter((p) => (!f('categoria') || p.categoria === f('categoria')) && coincide(p, ['producto', 'categoria']))
+      .map((p) => {
+        const porUnidad = new Map();
+        for (const i of p.compras) porUnidad.set(clave(i.unidad), (porUnidad.get(clave(i.unidad)) ?? 0) + i.cantidad);
+        const ultima = p.todas.reduce((m, i) => Math.max(m, fecha(i.fecha) ?? 0), 0);
+        return { ...p, gasto: p.compras.reduce((s, i) => s + i.subtotal, 0), veces: p.compras.length,
+          cantidadTxt: [...porUnidad].map(([u, c]) => `${cant(c)} ${u}`.trim()).join(' · '),
+          ultima, ultimaTxt: ultima ? new Date(ultima).toISOString().slice(0, 10).split('-').reverse().join('/') : '',
+          proveedores: unicos(p.compras.map((i) => i.proveedor)).join(', ') };
+      });
+    const con = base.filter((p) => p.veces), sin = base.filter((p) => !p.veces);
+    const estado = f('estado', 'con');
+    const nombrePeriodo = { hoy: 'hoy', semana: 'esta semana', mes: 'este mes', '30': 'en 30 días', todo: 'alguna vez' }[periodo];
+    const filtros = [
+      seg('periodo', [['hoy', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes'], ['30', '30 días'], ['todo', 'Todo']], 'semana'),
+      seg('estado', [['con', `Con compras ${nombrePeriodo}`, `${con.length} · ${corto(con.reduce((s, p) => s + p.gasto, 0))}`], ['sin', 'Sin compras', sin.length], ['', 'Todos', base.length]], 'con'),
+      select('categoria', 'Categoría', unicos([...productos.values()].map((p) => p.categoria))),
+      select('proveedor', 'Proveedor', unicos(datos.items.map((i) => i.proveedor))),
+      select('local', 'Local', unicos(datos.items.map((i) => i.local))),
+      buscar('Buscar producto'),
+    ];
+    const filas = estado === 'con' ? con : estado === 'sin' ? sin : base;
+    const columnas = [
+      { k: 'producto', t: 'Producto' }, { k: 'gasto', t: 'Gasto', tipo: 'gs', html: (x) => x.gasto ? `<span class="n">${gs(x.gasto)}</span>` : '<span class="tenue">—</span>' },
+      { k: 'cantidadTxt', t: 'Cantidad', html: (x) => x.cantidadTxt ? `<span class="n">${esc(x.cantidadTxt)}</span>` : '<span class="tenue">—</span>' },
+      { k: 'veces', t: 'Compras', tipo: 'num', opt: true }, { k: 'categoria', t: 'Categoría', opt: true },
+      { k: 'ultima', t: 'Última', tipo: 'orden', opt: true, html: (x) => x.ultimaTxt ? esc(x.ultimaTxt) : '<span class="tag t-ambar">nunca</span>' },
+      { k: 'proveedores', t: 'Proveedores', opt: true },
+    ];
+    const detalle = (x) => {
+      const lista = (x.compras.length ? x.compras : x.todas).slice().sort((a, b) => (fecha(b.fecha) ?? 0) - (fecha(a.fecha) ?? 0)).slice(0, 30);
+      return `<div class="grilla"><span>Categoría <b>${esc(x.categoria || '—')}</b></span><span>Última compra <b>${esc(x.ultimaTxt || 'nunca')}</b></span></div>
+        ${lista.length ? `<div class="titulo-det">${x.compras.length ? `Compras ${esc(nombrePeriodo)}` : 'Últimas compras'}</div>${tabla([['Fecha'], ['Proveedor'], ['Cantidad', 1], ['Precio', 1], ['Subtotal', 1]], lista.map((i) =>
+          `<tr><td>${esc(i.fecha)}</td><td>${esc(i.proveedor)}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.cantidad ? i.subtotal / i.cantidad : 0)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))}`
+          : '<span class="tenue">Nunca se compró desde que se usa el bot.</span>'}`;
+    };
+    return { filtros, filas, columnas, suma: 'gasto', orden: ['gasto', -1], id: (x) => clave(x.producto), detalle };
   },
 };
 
-// --- Tabla ---
-function valorOrden(fila, clave, tipo) {
-  if (tipo === 'fecha') return fecha(fila[clave])?.getTime() ?? -Infinity;
-  if (tipo === 'periodo') return fila.inicio;
-  if (tipo === 'gs' || tipo === 'num') return Number(fila[clave]) || 0;
-  return String(fila[clave] ?? '').toLowerCase();
+// --- Tabla principal ---
+function valorOrden(fila, c) {
+  if (c.tipo === 'fecha') return fecha(fila[c.k]) ?? -Infinity;
+  if (['gs', 'num', 'orden'].includes(c.tipo)) return Number(fila[c.k]) || 0;
+  return String(fila[c.k] ?? '').toLowerCase();
 }
-function celda(fila, [clave, , tipo]) {
-  const v = fila[clave];
-  if (tipo === 'gs') return `<td class="num">${v === '' || v == null ? '' : gs(v)}</td>`;
-  if (tipo === 'num') return `<td class="num">${v === '' ? '' : cant(v)}</td>`;
-  if (clave === 'esperaTxt' && fila.sinControl) return `<td class="largo">${esc(v.replace(/ ?·? ?sin control$/, ''))} <span class="marca rojo">sin control</span></td>`;
-  if (clave === 'deuda') return `<td class="num ${v > 0 ? 'rojo' : 'suave'}">${gs(v)}</td>`;
-  return `<td${tipo === 'largo' ? ' class="largo"' : ''}>${esc(v)}</td>`;
+function celda(x, c, primera, conDetalle) {
+  const clase = [c.opt ? 'opt' : '', ['gs', 'num'].includes(c.tipo) ? 'der-al' : '', primera ? 'prim' : ''].filter(Boolean).join(' ');
+  const v = x[c.k];
+  const contenido = c.html ? c.html(x) : c.tipo === 'gs' ? `<span class="n">${gs(v)}</span>` : c.tipo === 'num' ? `<span class="n">${v === '' ? '' : cant(v)}</span>` : esc(v);
+  return `<td${clase ? ` class="${clase}"` : ''}${primera ? ` title="${esc(v)}"` : ''}>${primera && conDetalle ? ICONO_CHEV : ''}${contenido}</td>`;
 }
 
 function dibujar() {
   document.querySelectorAll('nav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === vista.tab)));
   if (!datos) return;
-  const { filtros, filas, columnas, suma, orden } = TABS[vista.tab]();
-  const [clave, sentido] = vista.orden[vista.tab] ?? orden;
-  const tipo = columnas.find((c) => c[0] === clave)?.[2];
-  filas.sort((a, b) => { const x = valorOrden(a, clave, tipo), y = valorOrden(b, clave, tipo); return (x < y ? -1 : x > y ? 1 : 0) * sentido; });
+  const { filtros, filas, columnas, suma, orden, id, detalle } = TABS[vista.tab]();
+  const [k, sentido] = vista.orden[vista.tab] ?? orden;
+  const col = columnas.find((c) => c.k === k) ?? columnas[0];
+  filas.sort((a, b) => { const x = valorOrden(a, col), y = valorOrden(b, col); return (x < y ? -1 : x > y ? 1 : 0) * sentido; });
   const activo = document.activeElement?.dataset?.f;
   document.getElementById('filtros').innerHTML = filtros.join('');
   if (activo) { const el = document.querySelector(`[data-f="${activo}"]`); el?.focus(); if (el?.type === 'search') el.setSelectionRange(el.value.length, el.value.length); }
   const total = filas.reduce((s, x) => s + (Number(x[suma]) || 0), 0);
-  const indiceSuma = columnas.findIndex((c) => c[0] === suma);
+  const visibles = columnas.length;
+  const cuerpo = filas.map((x) => {
+    const clave = vista.tab + ':' + id(x), abierta = vista.abiertos.has(clave);
+    return `<tr class="fila con${abierta ? ' abierta' : ''}" data-id="${esc(clave)}" tabindex="0" aria-expanded="${abierta}">${columnas.map((c, i) => celda(x, c, i === 0, true)).join('')}</tr>` +
+      (abierta ? `<tr class="det"><td colspan="${visibles}">${detalle(x)}</td></tr>` : '');
+  }).join('');
   document.getElementById('caja').innerHTML = `<table>
-    <thead><tr>${columnas.map(([k, t, tp]) => `<th data-orden="${k}" class="${tp === 'gs' || tp === 'num' ? 'num' : ''}">${esc(t)}${k === clave ? (sentido > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
-    <tbody>${filas.map((x) => `<tr>${columnas.map((c) => celda(x, c)).join('')}</tr>`).join('') ||
-      `<tr><td colspan="${columnas.length}" class="suave">Nada con estos filtros.</td></tr>`}</tbody>
-    <tfoot><tr>${columnas.map((c, i) => i === 0 ? `<td>${filas.length} ${filas.length === 1 ? 'fila' : 'filas'}</td>` : i === indiceSuma ? `<td class="num">${gs(total)}</td>` : '<td></td>').join('')}</tr></tfoot>
+    <thead><tr>${columnas.map((c) => `<th data-orden="${c.k}" class="${[c.opt ? 'opt' : '', ['gs', 'num'].includes(c.tipo) ? 'der-al' : ''].join(' ')}">${esc(c.t)}${c.k === col.k ? `<span class="flecha"> ${sentido > 0 ? '↑' : '↓'}</span>` : ''}</th>`).join('')}</tr></thead>
+    <tbody>${cuerpo || `<tr><td colspan="${visibles}" class="vacio">Nada con estos filtros.</td></tr>`}</tbody>
+    <tfoot><tr>${columnas.map((c, i) => `<td class="${[c.opt ? 'opt' : '', c.k === suma ? 'der-al' : ''].join(' ')}">${i === 0 ? `${filas.length} ${filas.length === 1 ? 'fila' : 'filas'}` : c.k === suma ? `<span class="n">${gs(total)}</span>` : ''}</td>`).join('')}</tr></tfoot>
   </table>`;
 }
 
 // --- Eventos (delegados, registrados una vez) ---
 document.querySelector('nav').addEventListener('click', (e) => {
   const tab = e.target.closest('button')?.dataset.tab;
-  if (!tab) return;
-  vista.tab = tab; guardar('panel-compras-tab', tab); dibujar();
-});
-const alCambiar = (e) => { const k = e.target.dataset.f; if (!k) return; vista.filtros[vista.tab + k] = e.target.value; dibujar(); };
-document.getElementById('filtros').addEventListener('input', alCambiar);
-document.getElementById('filtros').addEventListener('change', alCambiar);
-document.getElementById('caja').addEventListener('click', (e) => {
-  const k = e.target.closest('th')?.dataset.orden;
-  if (!k) return;
-  const [actual, sentido] = vista.orden[vista.tab] ?? [];
-  vista.orden[vista.tab] = [k, actual === k ? -sentido : 1];
+  if (!tab || tab === vista.tab) return;
+  vista.tab = tab; guardar('panel-compras-tab', tab);
+  document.getElementById('caja').scrollTop = 0;
   dibujar();
+});
+const filtrosEl = document.getElementById('filtros');
+const alCambiar = (e) => { const k = e.target.dataset.f; if (!k) return; vista.filtros[vista.tab + k] = e.target.value; dibujar(); };
+filtrosEl.addEventListener('input', alCambiar);
+filtrosEl.addEventListener('change', alCambiar);
+filtrosEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-seg]');
+  if (!b) return;
+  vista.filtros[vista.tab + b.dataset.seg] = b.dataset.v;
+  dibujar();
+});
+const caja = document.getElementById('caja');
+function alternar(tr) {
+  const k = tr.dataset.id;
+  vista.abiertos.has(k) ? vista.abiertos.delete(k) : vista.abiertos.add(k);
+  dibujar();
+  caja.querySelector(`tr[data-id="${CSS.escape(k)}"]`)?.focus({ preventScroll: true });
+}
+caja.addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-orden]');
+  if (th && th.closest('table') === caja.firstElementChild) {
+    const [actual, sentido] = vista.orden[vista.tab] ?? [];
+    vista.orden[vista.tab] = [th.dataset.orden, actual === th.dataset.orden ? -sentido : -1];
+    return dibujar();
+  }
+  const tr = e.target.closest('tr.fila');
+  if (tr) alternar(tr);
+});
+caja.addEventListener('keydown', (e) => {
+  const tr = e.target.closest?.('tr.fila');
+  if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); alternar(tr); }
 });
 
 // --- Datos ---
-function avisar(texto) {
-  const aviso = document.getElementById('aviso');
-  aviso.textContent = texto; aviso.hidden = !texto;
-}
+function avisar(texto) { const a = document.getElementById('aviso'); a.textContent = texto; a.hidden = !texto; }
 async function cargar() {
   if (!token) return avisar('Pedí el link del panel con /panel en el chat privado del bot.');
   const boton = document.getElementById('actualizar');
-  boton.disabled = true;
+  boton.disabled = true; boton.classList.add('girando');
   try {
     const r = await fetch(API, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-    if (r.status === 401) { guardar(CLAVE, null); token = null; datos = null; document.getElementById('caja').innerHTML = '';
-      return avisar('El link venció o no tenés permiso. Pedí uno nuevo con /panel en el chat privado del bot.'); }
+    if (r.status === 401) {
+      guardar(CLAVE, null); token = null; datos = null;
+      document.getElementById('caja').innerHTML = ''; document.getElementById('filtros').innerHTML = '';
+      return avisar('El link venció o no tenés permiso. Pedí uno nuevo con /panel en el chat privado del bot.');
+    }
     if (!r.ok) throw new Error(r.status);
     datos = await r.json();
+    datos.catalogo ??= [];
     avisar('');
-    document.getElementById('hora').textContent = 'Datos de las ' + new Date(datos.actualizado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('hora').textContent = new Date(datos.actualizado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
     dibujar();
   } catch {
-    avisar(datos ? '' : 'No se pudieron traer los datos. Probá Actualizar en un rato.');
+    avisar(datos ? '' : 'No se pudieron traer los datos. Probá actualizar en un rato.');
     if (datos) document.getElementById('hora').textContent += ' · sin conexión';
-  } finally { boton.disabled = false; }
+  } finally { boton.disabled = false; boton.classList.remove('girando'); }
 }
 document.getElementById('actualizar').addEventListener('click', cargar);
 setInterval(() => { if (!document.hidden) cargar(); }, 120000);
