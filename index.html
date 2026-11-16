@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Panel de compras</title>
+<style>
+  :root {
+    --fondo: #f6f7f9; --panel: #fff; --texto: #1d2330; --suave: #667085; --borde: #e3e6eb;
+    --acento: #1f6feb; --rojo: #c4320a; --verde: #067647; --fila: #f9fafb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #0f1217; --panel: #171b22; --texto: #e6e9ef; --suave: #98a2b3; --borde: #2a303a;
+      --acento: #5b9bff; --rojo: #ff7a59; --verde: #47cd89; --fila: #1b2028; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fondo); color: var(--texto); }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; flex: 1; }
+  #hora { color: var(--suave); font-size: 13px; }
+  button, select, input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 7px 10px; }
+  button { cursor: pointer; }
+  nav { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--borde); overflow-x: auto; scrollbar-width: none; }
+  #caja:empty, #filtros:empty { display: none; }
+  nav button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px; color: var(--suave); white-space: nowrap; }
+  nav button[aria-selected="true"] { color: var(--texto); border-bottom-color: var(--acento); font-weight: 600; }
+  #filtros { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+  #filtros input[type="search"] { flex: 1 1 200px; }
+  #caja { margin: 0 16px 16px; background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; overflow: auto; max-height: calc(100vh - 210px); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--borde); white-space: nowrap; vertical-align: top; }
+  td.largo { white-space: normal; min-width: 220px; }
+  th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; color: var(--suave); font-weight: 600; z-index: 2; }
+  th:first-child, td:first-child { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  th:first-child { z-index: 3; }
+  tbody tr:nth-child(even) td { background: var(--fila); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  tfoot td { position: sticky; bottom: 0; background: var(--panel); font-weight: 600; border-top: 1px solid var(--borde); }
+  .marca { font-size: 12px; padding: 1px 6px; border-radius: 6px; border: 1px solid currentColor; }
+  .rojo { color: var(--rojo); } .verde { color: var(--verde); } .suave { color: var(--suave); }
+  #aviso { margin: 40px 16px; text-align: center; color: var(--suave); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Panel de compras</h1>
+  <span id="hora"></span>
+  <button id="actualizar" type="button">Actualizar</button>
+</header>
+<nav role="tablist">
+  <button role="tab" data-tab="facturas">Facturas</button>
+  <button role="tab" data-tab="pagos">Pagos</button>
+  <button role="tab" data-tab="proveedores">Proveedores</button>
+  <button role="tab" data-tab="productos">Productos</button>
+</nav>
+<div id="filtros"></div>
+<div id="caja"></div>
+<p id="aviso" hidden></p>
+
+<script>
+'use strict';
+const API = 'https://bot-compras-ildola67nq-uc.a.run.app/panel/datos';
+const CLAVE = 'panel-compras-token';
+
+// --- Token: llega en el link (#t=...) y queda guardado en este navegador. ---
+const guardar = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+const leerGuardado = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const enLink = new URLSearchParams(location.hash.slice(1)).get('t');
+if (enLink) { guardar(CLAVE, enLink); history.replaceState(null, '', location.pathname); }
+let token = enLink || leerGuardado(CLAVE);
+
+// --- Formato ---
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const gs = (n) => 'Gs. ' + Math.round(Number(n) || 0).toLocaleString('es-PY');
+const cant = (n) => (Number(n) || 0).toLocaleString('es-PY', { maximumFractionDigits: 3 });
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+// dd/mm/aaaa -> Date (UTC) o null.
+function fecha(texto) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(texto ?? '').trim());
+  return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+}
+const ddmm = (d) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+const mesDe = (texto) => { const d = fecha(texto); return d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}` : ''; };
+const nombreMes = (clave) => { const [a, m] = clave.split('-'); return `${MESES[+m - 1]} ${a}`; };
+const hoy = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+const dias = (texto) => { const d = fecha(texto); return d ? Math.round((hoy() - d) / 86400000) : ''; };
+const unicos = (lista) => [...new Set(lista.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'es'));
+
+// --- Estado ---
+let datos = null;
+const vista = { tab: leerGuardado('panel-compras-tab') || 'facturas', filtros: {}, orden: {} };
+const f = (clave, defecto = '') => vista.filtros[vista.tab + clave] ?? defecto;
+
+// --- Filtros: cada uno es [clave, etiqueta, opciones [valor, texto]] o 'buscar' o una fecha ---
+function select(clave, etiqueta, opciones, defecto = '') {
+  const actual = f(clave, defecto);
+  return `<select data-f="${clave}" aria-label="${esc(etiqueta)}">${opciones.map(([v, t]) =>
+    `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+}
+const todas = (etiqueta, valores, formato = (v) => v) => [['', etiqueta], ...valores.map((v) => [v, formato(v)])];
+const buscar = () => `<input type="search" data-f="q" placeholder="Buscar..." value="${esc(f('q'))}">`;
+const coincide = (fila, campos) => {
+  const q = f('q').trim().toLowerCase();
+  return !q || campos.some((c) => String(Array.isArray(fila[c]) ? fila[c].join(' ') : fila[c] ?? '').toLowerCase().includes(q));
+};
+
+// --- Pestañas: filtros, filas y columnas. tipo: texto | gs | num | fecha | dias ---
+const TABS = {
+  facturas() {
+    const lista = datos.facturas;
+    const estado = f('estado', 'no');
+    const filtros = [
+      select('estado', 'Estado', [['no', 'No pagadas'], ['si', 'Pagadas'], ['', 'Todas']], 'no'),
+      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
+      select('mes', 'Mes', todas('Todos los meses', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes)),
+      select('local', 'Local', todas('Todos los locales', unicos(lista.map((x) => x.local)))),
+      buscar(),
+    ];
+    const filas = lista.filter((x) => (!estado || x.pagada === (estado === 'si')) && (!f('proveedor') || x.proveedor === f('proveedor')) &&
+      (!f('mes') || mesDe(x.fecha) === f('mes')) && (!f('local') || x.local === f('local')) && coincide(x, ['proveedor', 'numero', 'medio', 'local']))
+      .map((x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha), estadoTxt: x.pagada ? 'Pagada' : 'No pagada' }));
+    const columnas = [['fecha', 'Fecha', 'fecha'], ['proveedor', 'Proveedor'], ['total', 'Total', 'gs'], ['numero', 'Número'], ['medio', 'Medio'], ['local', 'Local'],
+      ...(estado === 'si' ? [['fecha_pago', 'Fecha de pago', 'fecha']] : estado === 'no' ? [['dias', 'Días', 'num']] : [['estadoTxt', 'Estado']])];
+    return { filtros, filas, columnas, suma: 'total', orden: ['fecha', -1] };
+  },
+  pagos() {
+    const lista = datos.pagos;
+    const estado = f('estado', 'asociados');
+    const filtros = [
+      select('estado', 'Estado', [['asociados', 'Asociados'], ['esperando', 'Esperando factura'], ['', 'Todos']], 'asociados'),
+      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
+      select('mes', 'Mes', todas('Todos los meses', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes)),
+      select('medio', 'Medio', todas('Todos los medios', unicos(lista.map((x) => x.medio)))),
+      buscar(),
+    ];
+    const filas = lista.filter((x) => (!estado || x.esperando === (estado === 'esperando')) && (!f('proveedor') || x.proveedor === f('proveedor')) &&
+      (!f('mes') || mesDe(x.fecha) === f('mes')) && (!f('medio') || x.medio === f('medio')) &&
+      coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']))
+      .map((x) => ({ ...x, facturasTxt: x.facturas.join(', '), esperaTxt: [x.esperadas.length ? 'Facturas: ' + x.esperadas.join(', ') : '', x.sinControl ? 'sin control' : ''].filter(Boolean).join(' · ') }));
+    const columnas = [['fecha', 'Fecha', 'fecha'], ['proveedor', 'Proveedor'], ['monto', 'Monto', 'gs'], ['medio', 'Medio'], ['referencia', 'Referencia'],
+      ...(estado !== 'esperando' ? [['facturasTxt', 'Facturas aplicadas', 'largo']] : []),
+      ...(estado !== 'asociados' ? [['saldo', 'Saldo esperando', 'gs'], ['esperaTxt', 'Espera', 'largo']] : [])];
+    return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1] };
+  },
+  proveedores() {
+    const deuda = f('deuda');
+    const filtros = [select('deuda', 'Deuda', [['', 'Todos'], ['con', 'Con deuda'], ['sin', 'Sin deuda']]), buscar()];
+    const filas = datos.proveedores.filter((x) => (!deuda || (x.deuda > 0) === (deuda === 'con')) &&
+      coincide(x, ['proveedor', 'ruc', 'cuenta', 'alias', 'otros_nombres', 'telefono', 'email', 'direccion', 'productos']))
+      .map((x) => ({ ...x, productosTxt: x.productos.join(', ') }));
+    const columnas = [['proveedor', 'Proveedor'], ['deuda', 'Deuda', 'gs'], ['total', 'Total comprado', 'gs'], ['facturas', 'Facturas', 'num'],
+      ['ruc', 'RUC'], ['cuenta', 'Cuenta'], ['alias', 'Alias'], ['telefono', 'Teléfono'], ['email', 'Email'], ['direccion', 'Dirección', 'largo'],
+      ['otros_nombres', 'Otros nombres', 'largo'], ['productosTxt', 'Productos', 'largo']];
+    return { filtros, filas, columnas, suma: 'deuda', orden: ['deuda', -1] };
+  },
+  productos() {
+    const lista = datos.items;
+    const grupo = f('grupo', 'semana');
+    const desde = fecha(f('desde').split('-').reverse().join('/'));
+    const hasta = fecha(f('hasta').split('-').reverse().join('/'));
+    const filtros = [
+      select('grupo', 'Agrupar', [['dia', 'Por día'], ['semana', 'Por semana'], ['mes', 'Por mes']], 'semana'),
+      `<input type="date" data-f="desde" aria-label="Desde" value="${esc(f('desde'))}">`,
+      `<input type="date" data-f="hasta" aria-label="Hasta" value="${esc(f('hasta'))}">`,
+      select('proveedor', 'Proveedor', todas('Todos los proveedores', unicos(lista.map((x) => x.proveedor)))),
+      select('local', 'Local', todas('Todos los locales', unicos(lista.map((x) => x.local)))),
+      buscar(),
+    ];
+    const grupos = new Map();
+    for (const x of lista) {
+      const d = fecha(x.fecha);
+      if (!d || (desde && d < desde) || (hasta && d > hasta)) continue;
+      if ((f('proveedor') && x.proveedor !== f('proveedor')) || (f('local') && x.local !== f('local')) || !coincide(x, ['producto', 'proveedor'])) continue;
+      let inicio = d, periodo;
+      if (grupo === 'dia') periodo = ddmm(d) + '/' + d.getUTCFullYear();
+      else if (grupo === 'mes') { inicio = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); periodo = nombreMes(mesDe(x.fecha)); }
+      else { inicio = new Date(d - ((d.getUTCDay() + 6) % 7) * 86400000); periodo = `${ddmm(inicio)} – ${ddmm(new Date(+inicio + 6 * 86400000))}`; }
+      // Unidades distintas nunca se suman.
+      const clave = [+inicio, x.producto.toUpperCase(), String(x.unidad || '').toUpperCase()].join('|');
+      const g = grupos.get(clave) ?? { inicio: +inicio, periodo, producto: x.producto, sinAsignar: x.sinAsignar, unidad: x.unidad, cantidad: 0, gasto: 0, prov: new Set() };
+      g.cantidad += x.cantidad; g.gasto += x.subtotal; g.prov.add(x.proveedor);
+      grupos.set(clave, g);
+    }
+    const filas = [...grupos.values()].map((g) => ({ ...g, precio: g.cantidad ? g.gasto / g.cantidad : 0,
+      proveedoresTxt: [...g.prov].join(', '), productoTxt: g.producto + (g.sinAsignar ? ' (sin asignar)' : '') }));
+    const columnas = [['periodo', 'Período', 'periodo'], ['productoTxt', 'Producto'], ['cantidad', 'Cantidad', 'num'], ['unidad', 'Unidad'],
+      ['gasto', 'Gasto', 'gs'], ['precio', 'Precio promedio', 'gs'], ['proveedoresTxt', 'Proveedores', 'largo']];
+    return { filtros, filas, columnas, suma: 'gasto', orden: ['periodo', -1] };
+  },
+};
+
+// --- Tabla ---
+function valorOrden(fila, clave, tipo) {
+  if (tipo === 'fecha') return fecha(fila[clave])?.getTime() ?? -Infinity;
+  if (tipo === 'periodo') return fila.inicio;
+  if (tipo === 'gs' || tipo === 'num') return Number(fila[clave]) || 0;
+  return String(fila[clave] ?? '').toLowerCase();
+}
+function celda(fila, [clave, , tipo]) {
+  const v = fila[clave];
+  if (tipo === 'gs') return `<td class="num">${v === '' || v == null ? '' : gs(v)}</td>`;
+  if (tipo === 'num') return `<td class="num">${v === '' ? '' : cant(v)}</td>`;
+  if (clave === 'esperaTxt' && fila.sinControl) return `<td class="largo">${esc(v.replace(/ ?·? ?sin control$/, ''))} <span class="marca rojo">sin control</span></td>`;
+  if (clave === 'deuda') return `<td class="num ${v > 0 ? 'rojo' : 'suave'}">${gs(v)}</td>`;
+  return `<td${tipo === 'largo' ? ' class="largo"' : ''}>${esc(v)}</td>`;
+}
+
+function dibujar() {
+  document.querySelectorAll('nav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === vista.tab)));
+  if (!datos) return;
+  const { filtros, filas, columnas, suma, orden } = TABS[vista.tab]();
+  const [clave, sentido] = vista.orden[vista.tab] ?? orden;
+  const tipo = columnas.find((c) => c[0] === clave)?.[2];
+  filas.sort((a, b) => { const x = valorOrden(a, clave, tipo), y = valorOrden(b, clave, tipo); return (x < y ? -1 : x > y ? 1 : 0) * sentido; });
+  const activo = document.activeElement?.dataset?.f;
+  document.getElementById('filtros').innerHTML = filtros.join('');
+  if (activo) { const el = document.querySelector(`[data-f="${activo}"]`); el?.focus(); if (el?.type === 'search') el.setSelectionRange(el.value.length, el.value.length); }
+  const total = filas.reduce((s, x) => s + (Number(x[suma]) || 0), 0);
+  const indiceSuma = columnas.findIndex((c) => c[0] === suma);
+  document.getElementById('caja').innerHTML = `<table>
+    <thead><tr>${columnas.map(([k, t, tp]) => `<th data-orden="${k}" class="${tp === 'gs' || tp === 'num' ? 'num' : ''}">${esc(t)}${k === clave ? (sentido > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
+    <tbody>${filas.map((x) => `<tr>${columnas.map((c) => celda(x, c)).join('')}</tr>`).join('') ||
+      `<tr><td colspan="${columnas.length}" class="suave">Nada con estos filtros.</td></tr>`}</tbody>
+    <tfoot><tr>${columnas.map((c, i) => i === 0 ? `<td>${filas.length} ${filas.length === 1 ? 'fila' : 'filas'}</td>` : i === indiceSuma ? `<td class="num">${gs(total)}</td>` : '<td></td>').join('')}</tr></tfoot>
+  </table>`;
+}
+
+// --- Eventos (delegados, registrados una vez) ---
+document.querySelector('nav').addEventListener('click', (e) => {
+  const tab = e.target.closest('button')?.dataset.tab;
+  if (!tab) return;
+  vista.tab = tab; guardar('panel-compras-tab', tab); dibujar();
+});
+const alCambiar = (e) => { const k = e.target.dataset.f; if (!k) return; vista.filtros[vista.tab + k] = e.target.value; dibujar(); };
+document.getElementById('filtros').addEventListener('input', alCambiar);
+document.getElementById('filtros').addEventListener('change', alCambiar);
+document.getElementById('caja').addEventListener('click', (e) => {
+  const k = e.target.closest('th')?.dataset.orden;
+  if (!k) return;
+  const [actual, sentido] = vista.orden[vista.tab] ?? [];
+  vista.orden[vista.tab] = [k, actual === k ? -sentido : 1];
+  dibujar();
+});
+
+// --- Datos ---
+function avisar(texto) {
+  const aviso = document.getElementById('aviso');
+  aviso.textContent = texto; aviso.hidden = !texto;
+}
+async function cargar() {
+  if (!token) return avisar('Pedí el link del panel con /panel en el chat privado del bot.');
+  const boton = document.getElementById('actualizar');
+  boton.disabled = true;
+  try {
+    const r = await fetch(API, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+    if (r.status === 401) { guardar(CLAVE, null); token = null; datos = null; document.getElementById('caja').innerHTML = '';
+      return avisar('El link venció o no tenés permiso. Pedí uno nuevo con /panel en el chat privado del bot.'); }
+    if (!r.ok) throw new Error(r.status);
+    datos = await r.json();
+    avisar('');
+    document.getElementById('hora').textContent = 'Datos de las ' + new Date(datos.actualizado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
+    dibujar();
+  } catch {
+    avisar(datos ? '' : 'No se pudieron traer los datos. Probá Actualizar en un rato.');
+    if (datos) document.getElementById('hora').textContent += ' · sin conexión';
+  } finally { boton.disabled = false; }
+}
+document.getElementById('actualizar').addEventListener('click', cargar);
+setInterval(() => { if (!document.hidden) cargar(); }, 120000);
+dibujar();
+cargar();
+</script>
+</body>
+</html>
