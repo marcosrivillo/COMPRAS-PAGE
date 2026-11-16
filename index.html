@@ -52,6 +52,11 @@
   .seg button[aria-pressed="true"] { background: var(--acento-bg); color: var(--acento); font-weight: 600; }
   .seg small { display: block; font-size: 11px; font-weight: 400; color: var(--tenue); }
   .seg button[aria-pressed="true"] small { color: var(--acento2); }
+  /* General / Por factura: botones del ancho de su texto, centrados y separados */
+  .sub { display: flex; justify-content: center; gap: 10px; margin: 4px 0 6px; }
+  .sub button { border: 1px solid var(--borde); background: var(--panel); padding: 4px 14px; border-radius: 999px; color: var(--suave); white-space: nowrap; transition: background .15s; }
+  .sub button:hover { background: var(--hover); }
+  .sub button[aria-pressed="true"] { background: var(--acento-bg); border-color: var(--acento); color: var(--acento); font-weight: 600; }
   select, input[type="date"] { height: 30px; padding: 0 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 7px; max-width: 190px; }
   .buscar { position: relative; flex: 1 1 160px; }
   .buscar svg { position: absolute; left: 8px; top: 8px; width: 14px; height: 14px; color: var(--tenue); }
@@ -226,7 +231,7 @@ const TABS = {
       : '<span class="tenue">Sin renglones cargados.</span>';
     const detalleGrupo = (x) => {
       const sub = vista.sub[x.id] ?? 'general';
-      const botones = `<div class="seg" role="group">${[['general', 'General'], ['factura', 'Por factura']].map(([v, t]) =>
+      const botones = `<div class="sub" role="group">${[['general', 'General'], ['factura', 'Por factura']].map(([v, t]) =>
         `<button type="button" data-sub="${v}" data-id="${esc(x.id)}" aria-pressed="${v === sub}">${t}</button>`).join('')}</div>`;
       if (sub === 'factura') return botones + x.grupo.slice().sort((a, b) => (fecha(b.fecha) ?? 0) - (fecha(a.fecha) ?? 0)).map((fa) =>
         `<div class="titulo-det">${esc(fa.fecha)} · ${esc(fa.numero)} · ${gs(fa.total)}</div>${renglonesTabla(datos.items.filter((i) => i.factura === fa.id))}`).join('');
