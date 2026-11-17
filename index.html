@@ -273,13 +273,12 @@ const TABS = {
       { k: 'proveedor', t: 'Proveedor' }, { k: 'monto', t: 'Monto', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
       { k: 'medio', t: 'Medio', opt: true }, { k: 'referencia', t: 'Referencia', opt: true },
       { k: 'saldo', t: 'Estado', tipo: 'gs', html: (x) => !x.esperando ? `<span class="tag t-verde">${x.facturas.length} fact.</span>`
-        : `${x.sinControl ? '<span class="tag t-rojo">sin control</span> ' : ''}<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>` },
+        : `<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>` },
     ];
     const detalle = (x) => `<div class="grilla"><span>Medio <b>${esc(x.medio || '—')}</b></span><span>Referencia <b class="n">${esc(x.referencia || '—')}</b></span>
       ${x.saldo ? `<span>Saldo sin factura <b class="n">${gs(x.saldo)}</b></span>` : ''}</div>
       ${x.facturas.length ? `<div class="titulo-det">Facturas aplicadas</div><div class="chips">${x.facturas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
-      ${x.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${x.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
-      ${x.sinControl && x.esperando ? '<p class="rojo">Sin fila en CONTROL_PAGOS: no se sabe cuánto de este pago ya se usó.</p>' : ''}`;
+      ${x.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${x.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}`;
     return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
 
@@ -294,6 +293,7 @@ const TABS = {
     const columnas = [
       { k: 'proveedor', t: 'Proveedor' },
       { k: 'deuda', t: 'Deuda', tipo: 'gs', html: (x) => x.deuda > 0 ? `<span class="n rojo">${gs(x.deuda)}</span>` : '<span class="tenue">—</span>' },
+      { k: 'saldoFavor', t: 'Saldo a favor', tipo: 'gs', html: (x) => x.saldoFavor > 0 ? `<span class="tag t-verde">${gs(x.saldoFavor)}</span>` : '<span class="tenue">—</span>' },
       { k: 'total', t: 'Comprado', tipo: 'gs', opt: true }, { k: 'facturas', t: 'Fact.', tipo: 'num', opt: true },
       { k: 'nprod', t: 'Productos', tipo: 'num', html: (x) => `<span class="tag t-azul">${x.nprod}</span>` },
       { k: 'telefono', t: 'Teléfono', opt: true },
