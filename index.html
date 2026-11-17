@@ -109,6 +109,31 @@
 
   #aviso { margin: 40px 16px; text-align: center; color: var(--suave); }
 
+  /* Lecturas: formulario de correccion dentro del desplegable */
+  .form { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+  .campos { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .campos label, .renglon label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--suave); }
+  .form input, .form select { height: 30px; padding: 0 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 7px; min-width: 0; max-width: none; }
+  .form input.num { text-align: right; font-family: "Fira Code", ui-monospace, monospace; font-size: 12px; }
+  .campos .ancho { flex: 1 1 220px; } .campos .medio { flex: 0 1 150px; }
+  .renglon { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 7px; }
+  .renglon .leido { flex-basis: 100%; font-size: 11px; color: var(--tenue); }
+  .renglon .prod { flex: 1 1 220px; } .renglon .cant { flex: 0 1 80px; } .renglon .uni { flex: 0 1 70px; } .renglon .sub { flex: 0 1 110px; }
+  .renglon.dudoso { border-color: var(--ambar); }
+  .nuevo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ambar); height: 30px; }
+  .nuevo[hidden] { display: none; }
+  .quitar { border: 0; background: none; color: var(--tenue); height: 30px; width: 30px; border-radius: 6px; }
+  .quitar:hover { color: var(--rojo); background: var(--rojo-bg); }
+  .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .boton { border: 1px solid var(--borde); background: var(--panel); padding: 5px 12px; border-radius: 7px; color: var(--suave); }
+  .boton:hover { border-color: var(--acento2); color: var(--acento); }
+  .boton.primario { background: var(--acento); border-color: var(--acento); color: var(--panel); font-weight: 600; }
+  .boton.primario:hover { background: var(--acento2); color: #fff; }
+  .boton:disabled { opacity: .6; cursor: wait; }
+  .error { color: var(--rojo); font-weight: 500; }
+  .contador { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--ambar-bg); color: var(--ambar); font-size: 11px; line-height: 16px; }
+  #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--texto); color: var(--panel); padding: 8px 14px; border-radius: 8px; z-index: 10; max-width: calc(100% - 32px); }
+
   /* Celular: menos columnas; lo demas esta en el detalle */
   @media (max-width: 700px) {
     header { flex-wrap: wrap; row-gap: 6px; }
@@ -134,6 +159,7 @@
     <button role="tab" data-tab="pagos">Pagos</button>
     <button role="tab" data-tab="proveedores">Proveedores</button>
     <button role="tab" data-tab="productos">Productos</button>
+    <button role="tab" data-tab="lecturas">Lecturas</button>
   </nav>
   <div class="der">
     <span id="hora"></span>
@@ -145,6 +171,8 @@
 <div id="filtros"></div>
 <div id="caja"></div>
 <p id="aviso" hidden></p>
+<div id="toast" role="status" hidden></div>
+<datalist id="dl-productos"></datalist>
 
 <script>
 'use strict';
@@ -281,7 +309,7 @@ const TABS = {
   },
 
   pagos() {
-    const lista = datos.pagos.map((x, i) => ({ ...x, id: 'p' + i }));
+    const lista = datos.pagos.map((x, i) => ({ ...x, id: x.id ?? 'p' + i }));
     const estado = f('estado', 'esperando');
     const base = lista.filter((x) => (!f('proveedor') || x.proveedor === f('proveedor')) && (!f('mes') || mesDe(x.fecha) === f('mes')) &&
       (!f('medio') || x.medio === f('medio')) && coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']));
@@ -414,7 +442,125 @@ const TABS = {
     };
     return { filtros, filas, columnas, suma: 'gasto', orden: ['gasto', -1], id: (x) => clave(x.producto), detalle };
   },
+
+  lecturas() {
+    const filas = datos.lecturas.filter((x) => coincide(x, ['proveedor', 'numero', 'motivo', 'leido_por', 'texto']));
+    const columnas = [
+      { k: 'proveedor', t: 'Proveedor leído' }, { k: 'total', t: 'Total', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
+      { k: 'motivo', t: 'Por qué', html: (x) => `<span class="tag t-ambar">${esc(x.motivo || 'revisar')}</span>` },
+      { k: 'leido_por', t: 'Mandó', opt: true },
+    ];
+    return { filtros: [buscar('Buscar lectura')], filas, columnas, suma: 'total', orden: ['fecha', -1], id: (x) => x.id, detalle: formLectura };
+  },
 };
+
+// --- Lecturas: correccion desde el panel. El borrador vive aca, asi un redibujo no pierde lo escrito. ---
+const borradores = new Map();
+const API_LECTURA = API.replace(/datos$/, 'lectura');
+const conocido = () => new Set([...datos.catalogo.map((c) => clave(c.producto)), ...datos.proveedores.flatMap((p) => p.productos.map(clave))]);
+function borrador(l) {
+  if (!borradores.has(l.id)) {
+    const fa = l.factura;
+    borradores.set(l.id, { fecha: fa.fecha ?? '', proveedor: fa.proveedorConocido ? fa.proveedor : '', numero: fa.numero ?? '', total: fa.total ?? '', pagoId: '',
+      items: fa.items.map((i, indice) => ({ indice, texto: i.texto, alternativas: i.alternativas ?? [], producto: i.producto ?? '', nuevo: false,
+        cantidad: i.cantidad ?? '', unidad: i.unidad ?? '', subtotal: i.subtotal ?? '' })) });
+  }
+  return borradores.get(l.id);
+}
+const pagosPara = (b) => datos.pagos.filter((p) => p.saldo > 0 && (!p.proveedor || clave(p.proveedor) === clave(b.proveedor)));
+const diferencia = (b) => (numeroOVacio(b.total) || 0) - b.items.reduce((s, i) => s + (numeroOVacio(i.subtotal) || 0), 0);
+const textoDiferencia = (b) => { const d = diferencia(b); return d ? `Los renglones ${d > 0 ? 'suman' : 'pasan'} ${gs(Math.abs(d))} ${d > 0 ? 'menos que' : 'más que el'} total` : 'Renglones = total'; };
+function renglonForm(l, i, r, nombres) {
+  const a = (c) => `data-l="${esc(l.id)}" data-r="${r}" data-c="${c}"`;
+  const nuevo = i.producto && !nombres.has(clave(i.producto));
+  return `<div class="renglon${!i.producto || nuevo ? ' dudoso' : ''}">
+    ${i.texto ? `<span class="leido">Leído: ${esc(i.texto)}</span>` : ''}
+    <label class="prod">Producto<input ${a('producto')} list="dl-productos" value="${esc(i.producto)}" autocomplete="off"></label>
+    <label class="cant">Cantidad<input ${a('cantidad')} class="num" inputmode="decimal" value="${esc(i.cantidad)}"></label>
+    <label class="uni">Unidad<input ${a('unidad')} value="${esc(i.unidad)}"></label>
+    <label class="sub">Subtotal<input ${a('subtotal')} class="num" inputmode="numeric" value="${esc(i.subtotal)}"></label>
+    <label class="nuevo" ${nuevo ? '' : 'hidden'}><input type="checkbox" ${a('nuevo')}${i.nuevo ? ' checked' : ''}> Crear producto nuevo</label>
+    <button type="button" class="quitar" data-quitar="${r}" data-l="${esc(l.id)}" aria-label="Quitar renglón">✕</button>
+    ${i.alternativas.length ? `<div class="chips">${i.alternativas.map((p) => `<button type="button" class="chip" data-alt="${esc(p)}" data-l="${esc(l.id)}" data-r="${r}">${esc(p)}</button>`).join('')}</div>` : ''}
+  </div>`;
+}
+function formLectura(l) {
+  const info = `<div class="grilla"><span>Mandó <b>${esc(l.leido_por || '—')}</b></span><span>Leída <b>${esc(l.leido_en || '—')}</b></span></div>`;
+  if (!l.factura) return info + `<p class="tenue">Esta lectura no trae una factura que se pueda corregir acá. Resolvela por el chat privado del bot.</p>`;
+  const b = borrador(l), a = (c) => `data-l="${esc(l.id)}" data-c="${c}"`, nombres = conocido();
+  const proveedores = unicos(datos.proveedores.map((p) => p.proveedor));
+  const pagos = pagosPara(b);
+  return info + `<div class="form">
+    <div class="campos">
+      <label class="ancho">Proveedor${!l.factura.proveedorConocido ? ` <span class="tenue">(leído: ${esc(l.factura.proveedor || '—')})</span>` : ''}
+        <select ${a('proveedor')}><option value="">Elegir proveedor</option>${proveedores.map((p) => `<option${clave(p) === clave(b.proveedor) ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+      <label class="medio">Fecha<input ${a('fecha')} placeholder="dd/mm/aaaa" value="${esc(b.fecha)}"></label>
+      <label class="medio">Número<input ${a('numero')} value="${esc(b.numero)}"></label>
+      <label class="medio">Total<input ${a('total')} class="num" inputmode="numeric" value="${esc(b.total)}"></label>
+    </div>
+    ${b.items.map((i, r) => renglonForm(l, i, r, nombres)).join('')}
+    <div class="acciones"><button type="button" class="boton" data-agregar data-l="${esc(l.id)}">+ Renglón</button><span class="tenue" data-dif="${esc(l.id)}">${textoDiferencia(b)}</span></div>
+    <div class="campos"><label class="ancho">Pago (opcional)
+      <select ${a('pagoId')}><option value="">Sin pago</option>${pagos.map((p) => `<option value="${esc(p.id)}"${p.id === b.pagoId ? ' selected' : ''}>${esc(p.fecha)} · ${esc(p.proveedor || 'sin proveedor')} · saldo ${gs(p.saldo)}</option>`).join('')}</select></label></div>
+    <div class="acciones"><button type="button" class="boton primario" data-guardar="${esc(l.id)}">Guardar factura</button>
+      <button type="button" class="boton" data-descartar="${esc(l.id)}">Deshacer cambios</button>
+      ${b.error ? `<span class="error" role="alert">${esc(b.error)}</span>` : ''}</div>
+  </div>`;
+}
+// Montos en guaranies: el punto es separador de miles. Cantidades: la coma es decimal.
+const numeroOVacio = (v, monto = true) => {
+  const t = String(v ?? '').trim().replace(monto ? /[.,\s]/g : ',', monto ? '' : '.');
+  return t === '' ? null : Number(t);
+};
+function cuerpoLectura(l, b) {
+  const nombres = conocido();
+  for (const i of b.items) {
+    if (!String(i.producto).trim()) return 'Falta el producto en un renglón.';
+    if (!nombres.has(clave(i.producto)) && !i.nuevo) return `"${i.producto}" no existe: marcá "Crear producto nuevo" o elegí uno de la lista.`;
+  }
+  if (!b.proveedor) return 'Elegí el proveedor.';
+  return { id: l.id, version: l.version, pagoId: b.pagoId || undefined, factura: { fecha: b.fecha.trim(), proveedor: b.proveedor, numero: String(b.numero).trim(),
+    total: numeroOVacio(b.total), items: b.items.map((i) => ({ ...(i.indice != null ? { indice: i.indice } : {}), producto: String(i.producto).trim(),
+      ...(i.nuevo ? { nuevo: true } : {}), cantidad: numeroOVacio(i.cantidad, false), unidad: String(i.unidad ?? '').trim(), subtotal: numeroOVacio(i.subtotal) })) } };
+}
+function toast(texto) {
+  const t = document.getElementById('toast'); t.textContent = texto; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 4000);
+}
+async function guardarLectura(boton) {
+  const l = datos.lecturas.find((x) => x.id === boton.dataset.guardar), b = l && borradores.get(l.id);
+  if (!b) return;
+  const cuerpo = cuerpoLectura(l, b);
+  if (typeof cuerpo === 'string') { b.error = cuerpo; return dibujar(); }
+  boton.disabled = true; boton.textContent = 'Guardando...';
+  try {
+    const r = await fetch(API_LECTURA, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+    const respuesta = await r.json().catch(() => ({}));
+    if (r.status === 401) { b.error = 'El link venció o no tenés permiso. Pedí uno nuevo con /panel.'; return dibujar(); }
+    if (!r.ok) { b.error = respuesta.error || 'No se pudo guardar. Probá de nuevo en un rato.'; return dibujar(); }
+    borradores.delete(l.id); vista.abiertos.delete('lecturas:' + l.id);
+    toast('Factura cargada en el libro.');
+    await cargar();
+  } catch {
+    b.error = 'Sin conexión. No se guardó; probá de nuevo.'; dibujar();
+  }
+}
+// Escribir solo actualiza el borrador (sin redibujar: no se pierde el foco).
+function alEscribir(e) {
+  const el = e.target, l = el.dataset?.l, c = el.dataset?.c;
+  if (!l || !c || !borradores.has(l)) return;
+  const b = borradores.get(l), r = el.dataset.r;
+  const destino = r != null ? b.items[+r] : b;
+  destino[c] = el.type === 'checkbox' ? el.checked : el.value;
+  b.error = '';
+  if (c === 'producto') {
+    const nuevo = el.value.trim() && !conocido().has(clave(el.value));
+    const marca = el.closest('.renglon').querySelector('.nuevo');
+    marca.hidden = !nuevo; el.closest('.renglon').classList.toggle('dudoso', !el.value.trim() || nuevo);
+  }
+  if (c === 'total' || c === 'subtotal') { const d = caja.querySelector(`[data-dif="${CSS.escape(l)}"]`); if (d) d.textContent = textoDiferencia(b); }
+  if (c === 'proveedor' && e.type === 'change') { if (!pagosPara(b).some((p) => p.id === b.pagoId)) b.pagoId = ''; dibujar(); }
+}
 
 // --- Tabla principal ---
 function valorOrden(fila, c) {
@@ -432,6 +578,8 @@ function celda(x, c, primera, conDetalle) {
 function dibujar() {
   document.querySelectorAll('nav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === vista.tab)));
   if (!datos) return;
+  const n = datos.lecturas.length;
+  document.querySelector('[data-tab="lecturas"]').innerHTML = `Lecturas${n ? `<span class="contador">${n}</span>` : ''}`;
   const { filtros, filas, columnas, suma, orden, id, detalle } = TABS[vista.tab]();
   const [k, sentido] = vista.orden[vista.tab] ?? orden;
   const col = columnas.find((c) => c.k === k) ?? columnas[0];
@@ -488,11 +636,24 @@ caja.addEventListener('click', (e) => {
   }
   const sub = e.target.closest('[data-sub]');
   if (sub) { vista.sub[sub.dataset.id] = sub.dataset.sub; return dibujar(); }
+  const boton = e.target.closest('button[data-l], button[data-guardar], button[data-descartar]');
+  if (boton) {
+    if (boton.dataset.guardar) return guardarLectura(boton);
+    if (boton.dataset.descartar) { borradores.delete(boton.dataset.descartar); return dibujar(); }
+    const b = borradores.get(boton.dataset.l);
+    if (!b) return;
+    if (boton.dataset.alt) Object.assign(b.items[+boton.dataset.r], { producto: boton.dataset.alt, nuevo: false });
+    else if (boton.dataset.quitar != null) b.items.splice(+boton.dataset.quitar, 1);
+    else if (boton.hasAttribute('data-agregar')) b.items.push({ texto: '', alternativas: [], producto: '', nuevo: false, cantidad: '', unidad: '', subtotal: '' });
+    return dibujar();
+  }
   const tr = e.target.closest('tr.fila');
   if (tr) alternar(tr);
 });
 // toggle no burbujea: se escucha en captura.
 caja.addEventListener('toggle', (e) => { const k = e.target.dataset?.k; if (k) e.target.open ? internos.add(k) : internos.delete(k); }, true);
+caja.addEventListener('input', alEscribir);
+caja.addEventListener('change', alEscribir);
 caja.addEventListener('keydown', (e) => {
   const tr = e.target.closest?.('tr.fila');
   if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); alternar(tr); }
@@ -514,6 +675,11 @@ async function cargar() {
     if (!r.ok) throw new Error(r.status);
     datos = await r.json();
     datos.catalogo ??= [];
+    datos.lecturas ??= [];
+    // Lecturas que ya no estan en REVISAR: su borrador ya no sirve.
+    for (const id of borradores.keys()) if (!datos.lecturas.some((l) => l.id === id)) borradores.delete(id);
+    document.getElementById('dl-productos').innerHTML = unicos([...datos.catalogo.map((c) => c.producto), ...datos.proveedores.flatMap((p) => p.productos)])
+      .map((p) => `<option value="${esc(p)}">`).join('');
     avisar('');
     document.getElementById('hora').textContent = new Date(datos.actualizado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
     dibujar();
@@ -523,7 +689,8 @@ async function cargar() {
   } finally { boton.disabled = false; boton.classList.remove('girando'); }
 }
 document.getElementById('actualizar').addEventListener('click', cargar);
-setInterval(() => { if (!document.hidden) cargar(); }, 120000);
+// No se recarga mientras alguien escribe en un formulario de Lecturas.
+setInterval(() => { if (!document.hidden && !document.activeElement?.closest?.('.form')) cargar(); }, 120000);
 dibujar();
 cargar();
 </script>
