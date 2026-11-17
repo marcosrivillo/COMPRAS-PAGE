@@ -91,6 +91,14 @@
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 2px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--borde); font-size: 12px; }
   .chip .n { color: var(--suave); font-size: 11px; }
+  /* Factura o pago dentro de un desplegable: una linea que se abre con sus productos */
+  details.it { background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; margin: 4px 0; }
+  details.it > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 4px 8px; cursor: pointer; list-style: none; }
+  details.it > summary::-webkit-details-marker { display: none; }
+  details.it > summary:hover { background: var(--hover); }
+  details.it[open] > summary .chev { transform: rotate(90deg); color: var(--acento); }
+  details.it > div { padding: 2px 8px 8px; }
+  details.it .mini { border: 1px solid var(--borde); }
 
   .tag { display: inline-block; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; }
   .t-rojo { color: var(--rojo); background: var(--rojo-bg); }
@@ -194,6 +202,34 @@ const coincide = (fila, campos) => {
 const resumen = (lista, campo) => `${lista.length} · ${corto(lista.reduce((s, x) => s + (Number(x[campo]) || 0), 0))}`;
 const tabla = (cabeza, filas) => `<table class="mini"><thead><tr>${cabeza.map(([t, d]) => `<th${d ? ' class="der-al"' : ''}>${esc(t)}</th>`).join('')}</tr></thead><tbody>${filas.join('')}</tbody></table>`;
 
+// Por proveedor (una fila por proveedor, sus facturas o pagos en el desplegable) o cronologico (una fila por cada uno).
+const MODOS = [['proveedor', 'Por proveedor'], ['fecha', 'Cronológico']];
+const modo = () => f('vista', leerGuardado('panel-compras-vista-' + vista.tab) || 'fecha');
+// Un grupo por proveedor; el que tiene uno solo queda como esa fila.
+function agrupar(lista, armar) {
+  const grupos = new Map();
+  for (const x of lista) { const k = clave(x.proveedor); grupos.has(k) ? grupos.get(k).push(x) : grupos.set(k, [x]); }
+  return [...grupos.values()].map((g) => g.length === 1 ? g[0] : { ...armar(g), id: 'g:' + clave(g[0].proveedor), proveedor: g[0].proveedor, grupo: g });
+}
+const masNueva = (lista, k) => lista.reduce((m, x) => (fecha(x[k]) ?? -1) > (fecha(m) ?? -1) ? x[k] : m, '');
+const nuevaPrimero = (lista) => lista.slice().sort((a, b) => (fecha(b.fecha) ?? 0) - (fecha(a.fecha) ?? 0));
+const sumar = (lista, k) => lista.reduce((s, x) => s + (Number(x[k]) || 0), 0);
+// Los desplegables internos recuerdan si estaban abiertos (data-k) aunque se redibuje la tabla.
+const internos = new Set();
+const desplegable = (k, resumenHtml, cuerpo) =>
+  `<details class="it" data-k="${esc(k)}"${internos.has(k) ? ' open' : ''}><summary>${ICONO_CHEV}${resumenHtml}</summary><div>${cuerpo}</div></details>`;
+const tagFactura = (fa) => fa.pagada ? '<span class="tag t-verde">Pagada</span>'
+  : ((d) => `<span class="tag ${d > 30 ? 't-rojo' : d > 15 ? 't-ambar' : 't-azul'}">${d} d</span>`)(dias(fa.fecha) || 0);
+const renglonesTabla = (renglones) => renglones.length ? tabla([['Producto'], ['Cantidad', 1], ['Subtotal', 1]], renglones.map((i) =>
+  `<tr><td>${esc(i.producto)}${i.sinAsignar ? ' <span class="tag t-ambar">sin asignar</span>' : ''}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))
+  : '<span class="tenue">Sin renglones cargados.</span>';
+const detalleFactura = (fa) => `<div class="grilla"><span>Número <b>${esc(fa.numero)}</b></span><span>Medio <b>${esc(fa.medio || '—')}</b></span>
+  <span>Local <b>${esc(fa.local || '—')}</b></span>${fa.pagada ? `<span>Pagada <b>${esc(fa.fecha_pago || '—')}</b></span>` : ''}</div>
+  ${renglonesTabla(datos.items.filter((i) => i.factura === fa.id))}`;
+const facturaDesplegable = (fa, conProveedor) => desplegable('f:' + fa.id,
+  `<span class="n">${esc(fa.fecha)}</span>${conProveedor ? `<b>${esc(fa.proveedor)}</b>` : ''}<span>${esc(fa.numero)}</span><span class="n">${gs(fa.total)}</span>${tagFactura(fa)}`,
+  detalleFactura(fa));
+
 // Columna: { k, t, tipo: texto|gs|num|fecha|dias, opt (se oculta en celular), html (celda propia) }
 const TABS = {
   facturas() {
@@ -203,6 +239,7 @@ const TABS = {
       (!f('local') || x.local === f('local')) && coincide(x, ['proveedor', 'numero', 'medio', 'local']));
     const no = base.filter((x) => !x.pagada), si = base.filter((x) => x.pagada);
     const filtros = [
+      seg('vista', MODOS, modo()),
       seg('estado', [['no', 'No pagadas', resumen(no, 'total')], ['si', 'Pagadas', resumen(si, 'total')], ['', 'Todas', resumen(base, 'total')]], 'no'),
       select('proveedor', 'Proveedor', unicos(lista.map((x) => x.proveedor))),
       select('mes', 'Mes', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes),
@@ -210,15 +247,13 @@ const TABS = {
       buscar('Buscar factura'),
     ];
     const conDias = (x) => ({ ...x, dias: x.pagada ? '' : dias(x.fecha) });
-    // No pagadas: una fila por proveedor con todas sus facturas pendientes.
-    const porProveedor = new Map();
-    for (const x of no) { const k = clave(x.proveedor); porProveedor.has(k) ? porProveedor.get(k).push(x) : porProveedor.set(k, [x]); }
-    const grupos = [...porProveedor.values()].map((fs) => fs.length === 1 ? conDias(fs[0]) : {
-      id: 'g:' + clave(fs[0].proveedor), proveedor: fs[0].proveedor, total: fs.reduce((s, x) => s + x.total, 0),
-      fecha: 'No definida', numero: `${fs.length} facturas`, medio: unicos(fs.map((x) => x.medio)).join(', '),
-      local: unicos(fs.map((x) => x.local)).join(', '), dias: Math.max(...fs.map((x) => dias(x.fecha) || 0)), grupo: fs,
+    const elegidas = (estado === 'no' ? no : estado === 'si' ? si : base).map(conDias);
+    const filas = modo() !== 'proveedor' ? elegidas : agrupar(elegidas, (fs) => {
+      const pendientes = fs.filter((x) => !x.pagada);
+      return { total: sumar(fs, 'total'), fecha: masNueva(fs, 'fecha'), fecha_pago: masNueva(fs, 'fecha_pago'), numero: `${fs.length} facturas`,
+        medio: unicos(fs.map((x) => x.medio)).join(', '), local: unicos(fs.map((x) => x.local)).join(', '),
+        pagada: !pendientes.length, dias: pendientes.length ? Math.max(...pendientes.map((x) => x.dias || 0)) : '' };
     });
-    const filas = estado === 'no' ? grupos : (estado === 'si' ? si : base).map(conDias);
     const columnas = [
       { k: 'proveedor', t: 'Proveedor' }, { k: 'total', t: 'Total', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
       { k: 'numero', t: 'Número', opt: true }, { k: 'medio', t: 'Medio', opt: true }, { k: 'local', t: 'Local', opt: true },
@@ -226,15 +261,11 @@ const TABS = {
         : { k: 'dias', t: 'Días', tipo: 'num', html: (x) => x.pagada ? '<span class="tag t-verde">Pagada</span>'
           : `<span class="tag ${x.dias > 30 ? 't-rojo' : x.dias > 15 ? 't-ambar' : 't-azul'}">${x.dias} d</span>` },
     ];
-    const renglonesTabla = (renglones) => renglones.length ? tabla([['Producto'], ['Cantidad', 1], ['Subtotal', 1]], renglones.map((i) =>
-      `<tr><td>${esc(i.producto)}${i.sinAsignar ? ' <span class="tag t-ambar">sin asignar</span>' : ''}</td><td class="der-al n">${cant(i.cantidad)} ${esc(i.unidad)}</td><td class="der-al n">${gs(i.subtotal)}</td></tr>`))
-      : '<span class="tenue">Sin renglones cargados.</span>';
     const detalleGrupo = (x) => {
-      const sub = vista.sub[x.id] ?? 'general';
-      const botones = `<div class="sub" role="group">${[['general', 'General'], ['factura', 'Por factura']].map(([v, t]) =>
+      const sub = vista.sub[x.id] ?? 'factura';
+      const botones = `<div class="sub" role="group">${[['factura', 'Por factura'], ['general', 'Productos sumados']].map(([v, t]) =>
         `<button type="button" data-sub="${v}" data-id="${esc(x.id)}" aria-pressed="${v === sub}">${t}</button>`).join('')}</div>`;
-      if (sub === 'factura') return botones + x.grupo.slice().sort((a, b) => (fecha(b.fecha) ?? 0) - (fecha(a.fecha) ?? 0)).map((fa) =>
-        `<div class="titulo-det">${esc(fa.fecha)} · ${esc(fa.numero)} · ${gs(fa.total)}</div>${renglonesTabla(datos.items.filter((i) => i.factura === fa.id))}`).join('');
+      if (sub === 'factura') return botones + nuevaPrimero(x.grupo).map((fa) => facturaDesplegable(fa)).join('');
       // General: productos de todas las facturas sumados por producto y unidad.
       const ids = new Set(x.grupo.map((fa) => fa.id)), suma = new Map();
       for (const i of datos.items) {
@@ -245,13 +276,7 @@ const TABS = {
       return botones + `<div class="titulo-det">${x.grupo.length} facturas · productos sumados</div>` +
         renglonesTabla([...suma.values()].sort((a, b) => b.subtotal - a.subtotal));
     };
-    const detalle = (x) => {
-      if (x.grupo) return detalleGrupo(x);
-      const renglones = datos.items.filter((i) => i.factura === x.id);
-      return `<div class="grilla"><span>Número <b>${esc(x.numero)}</b></span><span>Medio <b>${esc(x.medio || '—')}</b></span>
-        <span>Local <b>${esc(x.local || '—')}</b></span>${x.pagada ? `<span>Pagada <b>${esc(x.fecha_pago || '—')}</b></span>` : ''}</div>
-        ${renglonesTabla(renglones)}`;
-    };
+    const detalle = (x) => x.grupo ? detalleGrupo(x) : detalleFactura(x);
     return { filtros, filas, columnas, suma: 'total', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
 
@@ -262,23 +287,40 @@ const TABS = {
       (!f('medio') || x.medio === f('medio')) && coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']));
     const esp = base.filter((x) => x.esperando), aso = base.filter((x) => !x.esperando);
     const filtros = [
+      seg('vista', MODOS, modo()),
       seg('estado', [['esperando', 'Esperando factura', resumen(esp, 'monto')], ['asociados', 'Asociados', resumen(aso, 'monto')], ['', 'Todos', resumen(base, 'monto')]], 'esperando'),
       select('proveedor', 'Proveedor', unicos(lista.map((x) => x.proveedor))),
       select('mes', 'Mes', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes),
       select('medio', 'Medio', unicos(lista.map((x) => x.medio))),
       buscar('Buscar pago'),
     ];
-    const filas = estado === 'esperando' ? esp : estado === 'asociados' ? aso : base;
+    const elegidos = estado === 'esperando' ? esp : estado === 'asociados' ? aso : base;
+    const filas = modo() !== 'proveedor' ? elegidos : agrupar(elegidos, (ps) => ({
+      monto: sumar(ps, 'monto'), fecha: masNueva(ps, 'fecha'), medio: unicos(ps.map((x) => x.medio)).join(', '), referencia: `${ps.length} pagos`,
+      saldo: sumar(ps, 'saldo'), esperando: ps.some((x) => x.esperando), facturas: ps.flatMap((x) => x.facturas), esperadas: ps.flatMap((x) => x.esperadas),
+    }));
     const columnas = [
       { k: 'proveedor', t: 'Proveedor' }, { k: 'monto', t: 'Monto', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
       { k: 'medio', t: 'Medio', opt: true }, { k: 'referencia', t: 'Referencia', opt: true },
       { k: 'saldo', t: 'Estado', tipo: 'gs', html: (x) => !x.esperando ? `<span class="tag t-verde">${x.facturas.length} fact.</span>`
         : `<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>` },
     ];
-    const detalle = (x) => `<div class="grilla"><span>Medio <b>${esc(x.medio || '—')}</b></span><span>Referencia <b class="n">${esc(x.referencia || '—')}</b></span>
-      ${x.saldo ? `<span>Saldo sin factura <b class="n">${gs(x.saldo)}</b></span>` : ''}</div>
-      ${x.facturas.length ? `<div class="titulo-det">Facturas aplicadas</div><div class="chips">${x.facturas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
-      ${x.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${x.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}`;
+    // La pagina recibe el numero de cada factura aplicada; se busca la factura del mismo proveedor para mostrar sus productos.
+    const facturaDe = (p, numero) => {
+      const mismas = datos.facturas.filter((fa) => fa.numero === numero);
+      return mismas.find((fa) => clave(fa.proveedor) === clave(p.proveedor)) ?? (mismas.length === 1 ? mismas[0] : null);
+    };
+    const detallePago = (p) => {
+      const aplicadas = p.facturas.map((n) => [n, facturaDe(p, n)]);
+      return `<div class="grilla"><span>Medio <b>${esc(p.medio || '—')}</b></span><span>Referencia <b class="n">${esc(p.referencia || '—')}</b></span>
+        ${p.saldo ? `<span>Saldo sin factura <b class="n">${gs(p.saldo)}</b></span>` : ''}</div>
+        ${aplicadas.length ? `<div class="titulo-det">Facturas aplicadas</div>${aplicadas.map(([n, fa]) => fa ? facturaDesplegable(fa, clave(fa.proveedor) !== clave(p.proveedor))
+          : `<span class="chip">${esc(n)}</span>`).join('')}` : ''}
+        ${p.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${p.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}`;
+    };
+    const tagPago = (p) => !p.esperando ? `<span class="tag t-verde">${p.facturas.length} fact.</span>` : `<span class="tag t-ambar">${p.saldo ? 'saldo ' + corto(p.saldo) : 'espera'}</span>`;
+    const detalle = (x) => !x.grupo ? detallePago(x) : nuevaPrimero(x.grupo).map((p) => desplegable('p:' + p.id,
+      `<span class="n">${esc(p.fecha)}</span><span>${esc(p.medio || '—')}</span><span class="n">${gs(p.monto)}</span>${tagPago(p)}`, detallePago(p))).join('');
     return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1], id: (x) => x.id, detalle };
   },
 
@@ -427,6 +469,7 @@ filtrosEl.addEventListener('click', (e) => {
   const b = e.target.closest('[data-seg]');
   if (!b) return;
   vista.filtros[vista.tab + b.dataset.seg] = b.dataset.v;
+  if (b.dataset.seg === 'vista') guardar('panel-compras-vista-' + vista.tab, b.dataset.v);
   dibujar();
 });
 const caja = document.getElementById('caja');
@@ -448,6 +491,8 @@ caja.addEventListener('click', (e) => {
   const tr = e.target.closest('tr.fila');
   if (tr) alternar(tr);
 });
+// toggle no burbujea: se escucha en captura.
+caja.addEventListener('toggle', (e) => { const k = e.target.dataset?.k; if (k) e.target.open ? internos.add(k) : internos.delete(k); }, true);
 caja.addEventListener('keydown', (e) => {
   const tr = e.target.closest?.('tr.fila');
   if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); alternar(tr); }
