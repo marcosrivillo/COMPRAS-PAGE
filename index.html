@@ -46,6 +46,9 @@
   /* Filtros */
   #filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; }
   #filtros:empty { display: none; }
+  #totales { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 2px 10px 8px; color: var(--suave); }
+  #totales:empty { display: none; }
+  #totales b { color: var(--texto); }
   .seg { display: flex; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 2px; gap: 2px; }
   .seg button { border: 0; background: none; padding: 4px 10px; border-radius: 6px; color: var(--suave); white-space: nowrap; transition: background .15s; }
   .seg button:hover { background: var(--hover); }
@@ -169,6 +172,7 @@
   </div>
 </header>
 <div id="filtros"></div>
+<div id="totales" role="status" aria-live="polite" aria-label="Totales con los filtros actuales"></div>
 <div id="caja"></div>
 <p id="aviso" hidden></p>
 <div id="toast" role="status" hidden></div>
@@ -575,12 +579,41 @@ function celda(x, c, primera, conDetalle) {
   return `<td${clase ? ` class="${clase}"` : ''}${primera ? ` title="${esc(v)}"` : ''}>${primera && conDetalle ? ICONO_CHEV : ''}${contenido}</td>`;
 }
 
+// Usa los documentos filtrados: agrupar por proveedor no duplica ni oculta importes.
+function totalesVista(filas) {
+  const registros = filas.flatMap((x) => x.grupo ?? [x]);
+  const nombres = { facturas: 'facturas', pagos: 'pagos', proveedores: 'proveedores', productos: 'productos', lecturas: 'lecturas' };
+  const etiquetas = [`<span><b>${registros.length}</b> ${nombres[vista.tab]} con estos filtros</span>`];
+  const importe = (titulo, total) => etiquetas.push(`<span>${titulo}: <b class="n">G. ${gs(total)}</b></span>`);
+  if (vista.tab === 'facturas') {
+    importe('Total facturado', sumar(registros, 'total'));
+    importe('Pendiente', sumar(registros.filter((x) => !x.pagada), 'total'));
+  } else if (vista.tab === 'pagos') {
+    importe('Total pagado', sumar(registros, 'monto'));
+    importe('Saldo pendiente de documentar', registros.reduce((s, x) => s + Math.max(Number(x.saldo) || 0, 0), 0));
+  } else if (vista.tab === 'proveedores') {
+    importe('Comprado', sumar(registros, 'total'));
+    importe('Deuda', sumar(registros, 'deuda'));
+    importe('Saldo pendiente de documentar', sumar(registros, 'saldoFavor'));
+  } else if (vista.tab === 'productos') {
+    importe('Gasto', sumar(registros, 'gasto'));
+    const unidades = new Map();
+    for (const p of registros) for (const i of p.compras) {
+      const unidad = clave(i.unidad) || 'SIN UNIDAD';
+      unidades.set(unidad, (unidades.get(unidad) ?? 0) + (Number(i.cantidad) || 0));
+    }
+    if (unidades.size) etiquetas.push(`<span>Cantidades: <b>${[...unidades].map(([u, n]) => `${cant(n)} ${esc(u)}`).join(' · ')}</b></span>`);
+  } else importe('Total por revisar', sumar(registros, 'total'));
+  return etiquetas.join('');
+}
+
 function dibujar() {
   document.querySelectorAll('nav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === vista.tab)));
   if (!datos) return;
   const n = datos.lecturas.length;
   document.querySelector('[data-tab="lecturas"]').innerHTML = `Lecturas${n ? `<span class="contador">${n}</span>` : ''}`;
   const { filtros, filas, columnas, suma, orden, id, detalle } = TABS[vista.tab]();
+  document.getElementById('totales').innerHTML = totalesVista(filas);
   const [k, sentido] = vista.orden[vista.tab] ?? orden;
   const col = columnas.find((c) => c.k === k) ?? columnas[0];
   filas.sort((a, b) => { const x = valorOrden(a, col), y = valorOrden(b, col); return (x < y ? -1 : x > y ? 1 : 0) * sentido; });
@@ -669,7 +702,7 @@ async function cargar() {
     const r = await fetch(API, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
     if (r.status === 401) {
       guardar(CLAVE, null); token = null; datos = null;
-      document.getElementById('caja').innerHTML = ''; document.getElementById('filtros').innerHTML = '';
+      document.getElementById('caja').innerHTML = ''; document.getElementById('filtros').innerHTML = ''; document.getElementById('totales').innerHTML = '';
       return avisar('El link venció o no tenés permiso. Pedí uno nuevo con /panel en el chat privado del bot.');
     }
     if (!r.ok) throw new Error(r.status);
