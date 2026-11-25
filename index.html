@@ -317,25 +317,35 @@ const TABS = {
     const estado = f('estado', 'esperando');
     const base = lista.filter((x) => (!f('proveedor') || x.proveedor === f('proveedor')) && (!f('mes') || mesDe(x.fecha) === f('mes')) &&
       (!f('medio') || x.medio === f('medio')) && coincide(x, ['proveedor', 'referencia', 'medio', 'facturas', 'esperadas']));
-    const esp = base.filter((x) => x.esperando), aso = base.filter((x) => !x.esperando);
+    const porSaldo = modo() === 'saldo';
+    const esp = base.filter(x => !x.adelanto && x.esperando), aso = base.filter(x => !x.adelanto && !x.esperando && !x.esperaCerrada);
+    const adelantos = base.filter(x => x.adelanto), cerrados = base.filter(x => x.esperaCerrada);
     const filtros = [
-      seg('vista', MODOS, modo()),
-      seg('estado', [['esperando', 'Esperando factura', resumen(esp, 'monto')], ['asociados', 'Asociados', resumen(aso, 'monto')], ['', 'Todos', resumen(base, 'monto')]], 'esperando'),
+      seg('vista', [...MODOS, ['saldo', 'Saldo a favor']], modo()),
+      ...(!porSaldo ? [seg('estado', [['esperando', 'Esperando factura', resumen(esp, 'monto')], ['asociados', 'Asociados', resumen(aso, 'monto')],
+        ['adelantos', 'Adelantos', resumen(adelantos, 'monto')], ['cerrados', 'Espera cerrada', cerrados.length], ['', 'Todos', base.length]], 'esperando')] : []),
       select('proveedor', 'Proveedor', unicos(lista.map((x) => x.proveedor))),
       select('mes', 'Mes', unicos(lista.map((x) => mesDe(x.fecha))).reverse(), nombreMes),
       select('medio', 'Medio', unicos(lista.map((x) => x.medio))),
       buscar('Buscar pago'),
     ];
-    const elegidos = estado === 'esperando' ? esp : estado === 'asociados' ? aso : base;
-    const filas = modo() !== 'proveedor' ? elegidos : agrupar(elegidos, (ps) => ({
+    const elegidos = porSaldo ? base.filter(p => p.saldoFavor > 0) :
+      ({ esperando: esp, asociados: aso, adelantos, cerrados }[estado] ?? base);
+    const filas = !porSaldo && modo() !== 'proveedor' ? elegidos : agrupar(elegidos, (ps) => ({
       monto: sumar(ps, 'monto'), fecha: masNueva(ps, 'fecha'), medio: unicos(ps.map((x) => x.medio)).join(', '), referencia: `${ps.length} pagos`,
-      saldo: sumar(ps, 'saldo'), esperando: ps.some((x) => x.esperando), facturas: ps.flatMap((x) => x.facturas), esperadas: ps.flatMap((x) => x.esperadas),
+      adelanto: ps.every(p => p.adelanto), estadoAdelanto: unicos(ps.map(p => p.estadoAdelanto)).join(', '),
+      esperaCerrada: ps.every(p => p.esperaCerrada), saldoFavor: sumar(ps, 'saldoFavor'),
+      saldo: sumar(ps.filter(p => !p.esperaCerrada), 'saldo'), esperando: ps.some((x) => x.esperando), facturas: ps.flatMap((x) => x.facturas), esperadas: ps.flatMap((x) => x.esperadas),
     }));
-    const columnas = [
+    const estadoPago = x => x.esperaCerrada ? '<span class="tag t-azul">Espera cerrada</span>' : !x.esperando
+      ? `<span class="tag t-verde">${x.facturas.length} fact.</span>` : `<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>`;
+    const columnas = porSaldo ? [
+      { k: 'proveedor', t: 'Proveedor' }, { k: 'saldoFavor', t: 'Saldo a favor', tipo: 'gs' }, { k: 'fecha', t: 'Último pago', tipo: 'fecha' },
+      { k: 'referencia', t: 'Pagos con saldo', opt: true },
+    ] : [
       { k: 'proveedor', t: 'Proveedor' }, { k: 'monto', t: 'Monto', tipo: 'gs' }, { k: 'fecha', t: 'Fecha', tipo: 'fecha' },
       { k: 'medio', t: 'Medio', opt: true }, { k: 'referencia', t: 'Referencia', opt: true },
-      { k: 'saldo', t: 'Estado', tipo: 'gs', html: (x) => !x.esperando ? `<span class="tag t-verde">${x.facturas.length} fact.</span>`
-        : `<span class="tag t-ambar">${x.saldo ? 'saldo ' + corto(x.saldo) : 'espera'}</span>` },
+      { k: 'saldo', t: 'Estado', tipo: 'gs', html: x => x.adelanto ? `<span class="tag t-azul">${esc(x.estadoAdelanto)}</span>` : estadoPago(x) },
     ];
     // La pagina recibe el numero de cada factura aplicada; se busca la factura del mismo proveedor para mostrar sus productos.
     const facturaDe = (p, numero) => {
@@ -345,15 +355,16 @@ const TABS = {
     const detallePago = (p) => {
       const aplicadas = p.facturas.map((n) => [n, facturaDe(p, n)]);
       return `<div class="grilla"><span>Medio <b>${esc(p.medio || '—')}</b></span><span>Referencia <b class="n">${esc(p.referencia || '—')}</b></span>
-        ${p.saldo ? `<span>Saldo sin factura <b class="n">${gs(p.saldo)}</b></span>` : ''}</div>
+        ${p.adelanto ? `<span>Origen del efectivo <b>${esc(p.origen)}</b></span><span>Responsable <b>${esc(p.responsable)}</b></span>` : ''}
+        ${p.saldo ? `<span>${p.esperaCerrada ? 'Diferencia al cerrar' : 'Saldo sin factura'} <b class="n">${gs(p.saldo)}</b></span>` : ''}</div>
         ${aplicadas.length ? `<div class="titulo-det">Facturas aplicadas</div>${aplicadas.map(([n, fa]) => fa ? facturaDesplegable(fa, clave(fa.proveedor) !== clave(p.proveedor))
           : `<span class="chip">${esc(n)}</span>`).join('')}` : ''}
-        ${p.esperadas.length ? `<div class="titulo-det">Facturas que espera</div><div class="chips">${p.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}`;
+        ${p.esperadas.length ? `<div class="titulo-det">${p.esperaCerrada ? 'Facturas que esperaba' : 'Facturas que espera'}</div><div class="chips">${p.esperadas.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}
+        ${datos.puedeCerrarEspera && p.versionEspera && !p.esperaCerrada ? `<div class="acciones"><button type="button" class="boton" data-cerrar-espera="${esc(p.id)}">Quitar de la espera</button></div>` : ''}`;
     };
-    const tagPago = (p) => !p.esperando ? `<span class="tag t-verde">${p.facturas.length} fact.</span>` : `<span class="tag t-ambar">${p.saldo ? 'saldo ' + corto(p.saldo) : 'espera'}</span>`;
     const detalle = (x) => !x.grupo ? detallePago(x) : nuevaPrimero(x.grupo).map((p) => desplegable('p:' + p.id,
-      `<span class="n">${esc(p.fecha)}</span><span>${esc(p.medio || '—')}</span><span class="n">${gs(p.monto)}</span>${tagPago(p)}`, detallePago(p))).join('');
-    return { filtros, filas, columnas, suma: 'monto', orden: ['fecha', -1], id: (x) => x.id, detalle };
+      `<span class="n">${esc(p.fecha)}</span><span>${esc(p.medio || '—')}</span><span class="n">${gs(porSaldo ? p.saldoFavor : p.monto)}</span>${p.adelanto ? '' : estadoPago(p)}`, detallePago(p))).join('');
+    return { filtros, filas, columnas, suma: porSaldo ? 'saldoFavor' : 'monto', orden: [porSaldo ? 'saldoFavor' : 'fecha', -1], id: x => x.id, detalle };
   },
 
   proveedores() {
@@ -461,6 +472,7 @@ const TABS = {
 // --- Lecturas: correccion desde el panel. El borrador vive aca, asi un redibujo no pierde lo escrito. ---
 const borradores = new Map();
 const API_LECTURA = API.replace(/datos$/, 'lectura');
+const API_CERRAR_ESPERA = API.replace(/datos$/, 'pago/cerrar-espera');
 const conocido = () => new Set([...datos.catalogo.map((c) => clave(c.producto)), ...datos.proveedores.flatMap((p) => p.productos.map(clave))]);
 function borrador(l) {
   if (!borradores.has(l.id)) {
@@ -531,6 +543,35 @@ function toast(texto) {
   const t = document.getElementById('toast'); t.textContent = texto; t.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 4000);
 }
+const lecturasResueltas = new Map();
+const esperasCerradasEnPantalla = new Set();
+let cargaActiva = 0;
+function reflejarEsperasCerradas() {
+  for (const p of datos.pagos) {
+    if (!esperasCerradasEnPantalla.has(p.id) || p.esperaCerrada) continue;
+    const proveedor = datos.proveedores.find(x => clave(x.proveedor) === clave(p.proveedor));
+    if (proveedor && p.saldoFavor > 0) proveedor.saldoFavor = Math.max(0, proveedor.saldoFavor - p.saldoFavor);
+    Object.assign(p, { esperaCerrada: true, esperando: false, saldoFavor: 0, versionEspera: undefined });
+  }
+}
+
+async function cerrarEspera(boton) {
+  const pago = datos.pagos.find(p => p.id === boton.dataset.cerrarEspera);
+  if (!pago?.versionEspera || !confirm(`¿Quitar de la espera el pago de ${pago.proveedor || 'proveedor sin identificar'} por G. ${gs(pago.monto)}? El pago quedará en el historial y su diferencia dejará de estar disponible para aplicar.`)) return;
+  boton.disabled = true;
+  try {
+    const r = await fetch(API_CERRAR_ESPERA, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: pago.id, version: pago.versionEspera }) });
+    const resultado = await r.json().catch(() => ({}));
+    if (!r.ok || !resultado.ok) return toast(resultado.error || (r.status === 401 ? 'El link venció o no tenés permiso para cerrar esperas.' : 'No se pudo cerrar la espera. Actualizá y probá de nuevo.'));
+    esperasCerradasEnPantalla.add(pago.id);
+    if (datos) { reflejarEsperasCerradas(); dibujar(); }
+    toast('Espera cerrada. El pago sigue en el historial.');
+    await cargar({ actualizar: true });
+  } catch {
+    toast('No se pudo confirmar el cierre. Actualizá el panel para verificarlo.');
+  } finally { boton.disabled = false; }
+}
 async function guardarLectura(boton) {
   const l = datos.lecturas.find((x) => x.id === boton.dataset.guardar), b = l && borradores.get(l.id);
   if (!b) return;
@@ -543,8 +584,12 @@ async function guardarLectura(boton) {
     if (r.status === 401) { b.error = 'El link venció o no tenés permiso. Pedí uno nuevo con /panel.'; return dibujar(); }
     if (!r.ok) { b.error = respuesta.error || 'No se pudo guardar. Probá de nuevo en un rato.'; return dibujar(); }
     borradores.delete(l.id); vista.abiertos.delete('lecturas:' + l.id);
-    toast('Factura cargada en el libro.');
-    await cargar();
+    lecturasResueltas.set(l.id, l.version);
+    ++cargaActiva;
+    datos.lecturas = datos.lecturas.filter(x => x.id !== l.id);
+    dibujar();
+    toast(respuesta.existente ? 'Lectura vinculada a la factura existente.' : 'Factura cargada en el libro.');
+    await cargar({ actualizar: true });
   } catch {
     b.error = 'Sin conexión. No se guardó; probá de nuevo.'; dibujar();
   }
@@ -589,12 +634,18 @@ function totalesVista(filas) {
     importe('Total facturado', sumar(registros, 'total'));
     importe('Pendiente', sumar(registros.filter((x) => !x.pagada), 'total'));
   } else if (vista.tab === 'pagos') {
-    importe('Total pagado', sumar(registros, 'monto'));
-    importe('Saldo pendiente de documentar', registros.reduce((s, x) => s + Math.max(Number(x.saldo) || 0, 0), 0));
+    if (modo() === 'saldo') {
+      importe('Saldo total a favor', sumar(registros, 'saldoFavor'));
+      return etiquetas.join('');
+    }
+    importe('Total pagado', sumar(registros.filter(x => !x.adelanto), 'monto'));
+    if (registros.some(x => x.adelanto)) importe('Adelantos para rendición', sumar(registros.filter(x => x.adelanto), 'monto'));
+    importe('Saldo pendiente de documentar', registros.filter(x => !x.esperaCerrada && !x.adelanto)
+      .reduce((s, x) => s + Math.max(Number(x.saldo) || 0, 0), 0));
   } else if (vista.tab === 'proveedores') {
     importe('Comprado', sumar(registros, 'total'));
     importe('Deuda', sumar(registros, 'deuda'));
-    importe('Saldo pendiente de documentar', sumar(registros, 'saldoFavor'));
+    importe('Saldo a favor', sumar(registros, 'saldoFavor'));
   } else if (vista.tab === 'productos') {
     importe('Gasto', sumar(registros, 'gasto'));
     const unidades = new Map();
@@ -620,7 +671,10 @@ function dibujar() {
   const activo = document.activeElement?.dataset?.f;
   document.getElementById('filtros').innerHTML = filtros.join('');
   if (activo) { const el = document.querySelector(`[data-f="${activo}"]`); el?.focus(); if (el?.type === 'search') el.setSelectionRange(el.value.length, el.value.length); }
-  const total = filas.reduce((s, x) => s + (Number(x[suma]) || 0), 0);
+  const documentos = filas.flatMap(x => x.grupo ?? [x]);
+  const fondos = vista.tab === 'pagos' ? documentos.filter(x => x.adelanto) : [];
+  const total = documentos.filter(x => !fondos.includes(x)).reduce((s, x) => s + (Number(x[suma]) || 0), 0);
+  const pieFondos = fondos.length ? `<br><small>Adelantos: ${gs(sumar(fondos, 'monto'))}</small>` : '';
   const visibles = columnas.length;
   const cuerpo = filas.map((x) => {
     const clave = vista.tab + ':' + id(x), abierta = vista.abiertos.has(clave);
@@ -630,7 +684,7 @@ function dibujar() {
   document.getElementById('caja').innerHTML = `<table>
     <thead><tr>${columnas.map((c) => `<th data-orden="${c.k}" class="${[c.opt ? 'opt' : '', ['gs', 'num'].includes(c.tipo) ? 'der-al' : ''].join(' ')}">${esc(c.t)}${c.k === col.k ? `<span class="flecha"> ${sentido > 0 ? '↑' : '↓'}</span>` : ''}</th>`).join('')}</tr></thead>
     <tbody>${cuerpo || `<tr><td colspan="${visibles}" class="vacio">Nada con estos filtros.</td></tr>`}</tbody>
-    <tfoot><tr>${columnas.map((c, i) => `<td class="${[c.opt ? 'opt' : '', c.k === suma ? 'der-al' : ''].join(' ')}">${i === 0 ? `${filas.length} ${filas.length === 1 ? 'fila' : 'filas'}` : c.k === suma ? `<span class="n">${gs(total)}</span>` : ''}</td>`).join('')}</tr></tfoot>
+    <tfoot><tr>${columnas.map((c, i) => `<td class="${[c.opt ? 'opt' : '', c.k === suma ? 'der-al' : ''].join(' ')}">${i === 0 ? `${filas.length} ${filas.length === 1 ? 'fila' : 'filas'}` : c.k === suma ? `<span class="n">${gs(total)}</span>${pieFondos}` : ''}</td>`).join('')}</tr></tfoot>
   </table>`;
 }
 
@@ -650,7 +704,10 @@ filtrosEl.addEventListener('click', (e) => {
   const b = e.target.closest('[data-seg]');
   if (!b) return;
   vista.filtros[vista.tab + b.dataset.seg] = b.dataset.v;
-  if (b.dataset.seg === 'vista') guardar('panel-compras-vista-' + vista.tab, b.dataset.v);
+  if (b.dataset.seg === 'vista') {
+    guardar('panel-compras-vista-' + vista.tab, b.dataset.v);
+    if (vista.tab === 'pagos') delete vista.orden.pagos;
+  }
   dibujar();
 });
 const caja = document.getElementById('caja');
@@ -669,6 +726,8 @@ caja.addEventListener('click', (e) => {
   }
   const sub = e.target.closest('[data-sub]');
   if (sub) { vista.sub[sub.dataset.id] = sub.dataset.sub; return dibujar(); }
+  const cierre = e.target.closest('button[data-cerrar-espera]');
+  if (cierre) return cerrarEspera(cierre);
   const boton = e.target.closest('button[data-l], button[data-guardar], button[data-descartar]');
   if (boton) {
     if (boton.dataset.guardar) return guardarLectura(boton);
@@ -694,21 +753,27 @@ caja.addEventListener('keydown', (e) => {
 
 // --- Datos ---
 function avisar(texto) { const a = document.getElementById('aviso'); a.textContent = texto; a.hidden = !texto; }
-async function cargar() {
+async function cargar({ actualizar = false } = {}) {
   if (!token) return avisar('Pedí el link del panel con /panel en el chat privado del bot.');
+  const solicitud = ++cargaActiva;
   const boton = document.getElementById('actualizar');
   boton.disabled = true; boton.classList.add('girando');
   try {
-    const r = await fetch(API, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+    const r = await fetch(API + (actualizar ? '?actualizar=1' : ''), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+    if (solicitud !== cargaActiva) return;
     if (r.status === 401) {
       guardar(CLAVE, null); token = null; datos = null;
       document.getElementById('caja').innerHTML = ''; document.getElementById('filtros').innerHTML = ''; document.getElementById('totales').innerHTML = '';
       return avisar('El link venció o no tenés permiso. Pedí uno nuevo con /panel en el chat privado del bot.');
     }
     if (!r.ok) throw new Error(r.status);
-    datos = await r.json();
+    const nuevos = await r.json();
+    if (solicitud !== cargaActiva) return;
+    datos = nuevos;
     datos.catalogo ??= [];
     datos.lecturas ??= [];
+    reflejarEsperasCerradas();
+    datos.lecturas = datos.lecturas.filter(l => !lecturasResueltas.has(l.id) || lecturasResueltas.get(l.id) !== l.version);
     // Lecturas que ya no estan en REVISAR: su borrador ya no sirve.
     for (const id of borradores.keys()) if (!datos.lecturas.some((l) => l.id === id)) borradores.delete(id);
     document.getElementById('dl-productos').innerHTML = unicos([...datos.catalogo.map((c) => c.producto), ...datos.proveedores.flatMap((p) => p.productos)])
@@ -717,11 +782,12 @@ async function cargar() {
     document.getElementById('hora').textContent = new Date(datos.actualizado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
     dibujar();
   } catch {
+    if (solicitud !== cargaActiva) return;
     avisar(datos ? '' : 'No se pudieron traer los datos. Probá actualizar en un rato.');
     if (datos) document.getElementById('hora').textContent += ' · sin conexión';
-  } finally { boton.disabled = false; boton.classList.remove('girando'); }
+  } finally { if (solicitud === cargaActiva) { boton.disabled = false; boton.classList.remove('girando'); } }
 }
-document.getElementById('actualizar').addEventListener('click', cargar);
+document.getElementById('actualizar').addEventListener('click', () => cargar({ actualizar: true }));
 // No se recarga mientras alguien escribe en un formulario de Lecturas.
 setInterval(() => { if (!document.hidden && !document.activeElement?.closest?.('.form')) cargar(); }, 120000);
 dibujar();
